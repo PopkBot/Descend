@@ -35,5 +35,11 @@
     <ClInclude Include="SC_LRE.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="DecendVehicle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ParachuteDecend.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

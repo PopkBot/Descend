@@ -97,7 +97,7 @@ public:
 					return (	(densityStep[i]-densityStep[i-1])/(heightStep[i] - heightStep[i - 1])*(height-heightStep[i-1])+densityStep[i-1]	);
 				}
 			}
-		return(0);
+		return(densityStep[0]);
 
 	}
 

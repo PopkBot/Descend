@@ -150,8 +150,10 @@
     <ClCompile Include="Decend.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="DecendVehicle.h" />
     <ClInclude Include="excelExporter.h" />
     <ClInclude Include="Graph.h" />
+    <ClInclude Include="ParachuteDecend.h" />
     <ClInclude Include="Planet.h" />
     <ClInclude Include="SC_LRE.h" />
     <ClInclude Include="SpaceCraft.h" />

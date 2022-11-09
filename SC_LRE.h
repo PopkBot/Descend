@@ -41,7 +41,7 @@ public:
 	float mdu;
 	float specImpuls=2500;
 	float massCoefsPropelSys[3];
-	double atoCoeff;
+	//double atoCoeff;
 	float massCoefsEng[3];
 	double gammaCoef;
 	float oxCoef;
@@ -67,6 +67,7 @@ public:
 	float hIgnition = 0;
 
 	bool bcolibration = false;
+	bool landed = false;
 
 	sf::Vector2f velocity;
 	sf::Vector2f position;
@@ -95,12 +96,12 @@ public:
 
 	//Ìועמהû -םאקאכמ-
 
-	SC_LRE(string fileName) {
+	SC_LRE(string fileName, string matrixParFileName) {
 
 
 		double dataArray[SC_LRE_MATRIX_PARAPMS][FILE_RESOLUTION];
 
-		excelExporter.extractMatrixFromFile(SC_LRE_MATRIX_PARAMS_DIR, fileName, dataArray, FILE_RESOLUTION, SC_LRE_MATRIX_PARAPMS);
+		excelExporter.extractMatrixFromFile(SC_LRE_MATRIX_PARAMS_DIR, matrixParFileName, dataArray, FILE_RESOLUTION, SC_LRE_MATRIX_PARAPMS);
 
 		for (int i = 0; i < FILE_RESOLUTION; i++) {
 			machArray[i] = dataArray[0][i];
@@ -197,6 +198,7 @@ public:
 		double g0 = (planet.gravPar / planet.radius) / planet.radius;
 		totalMass = findTotalMass(fuelMass, planet, MASS_EPS);
 		thrust = totalMass * g0 * overLoadCoef;
+		landed = false;
 
 		//printf("total mass %2f\tg0 %.2f\tthrust %.2f\n", totalMass, g0, thrust);
 	}
@@ -302,6 +304,12 @@ public:
 				velocity.x = 0;
 				velocity.y = 0;
 				phi = 0;
+		}
+		else if (position.y < -H_EPS) {
+			position.y = 0;
+		
+			landed = true;
+			
 		}
 
 		//printf("t %2f\t", time);

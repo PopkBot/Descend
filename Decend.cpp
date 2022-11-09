@@ -6,11 +6,13 @@
 #include <thread>
 #include <sstream>
 
+
 #include "Graph.h"
 //#include "excelExporter.h"
 #include "Planet.h"
 #include "SpaceCraft.h"
 #include "SC_LRE.h"
+#include "ParachuteDecend.h"
 
 //Импорт -конецо-
 
@@ -19,8 +21,11 @@
 #define PLANET "Venus"
 #define SPACE_CRAFT "SpaceCraft"
 #define SPACE_CRAFT_LRE "Soyuz_LRE"
+#define SPACE_CRAFT_PAR "Soyuz_Parashute"
 
-#define DRAW_RATE 10
+#define DRAW_RATE 20
+
+
 
 
 //Объявление констант -конец-
@@ -31,9 +36,12 @@
 
 Planet planet(PLANET);
 SpaceCraft spaceCraft(SPACE_CRAFT);
-SC_LRE sc_LRE(SPACE_CRAFT_LRE);
+SC_LRE sc_LRE(SPACE_CRAFT_LRE, SPACE_CRAFT_LRE);
+ParachuteDecend sc_PAR(SPACE_CRAFT_PAR, SPACE_CRAFT_LRE);
 Graph graph;
 ExcelExporter excelExporter;
+
+double simSpeed = 0;
 
 
 //Объявление переменных -конец-
@@ -83,15 +91,138 @@ void drawSpaceCraft(int lineNum, SC_LRE &sc) {
 
 }
 
+void drawSpaceCraft(int lineNum, ParachuteDecend& sc) {
+
+	char buffer[50];
+
+	std::snprintf(buffer, 50, "%.2f", sc.position.y);
+	graph.lines[lineNum].text.setString(buffer);
+
+	std::snprintf(buffer, 50, "%.2f", sc.position.x);
+	graph.lines[lineNum].textX.setString(buffer);
+
+	graph.drawline(sc.position.x, sc.position.y, 0);
+
+	graph.drawIcon(lineNum, sc.phi);
+
+	graph.lines[lineNum].bdraw = true;
+
+}
+
+void printMenu() {
+	cout <<"\n\n1 - Определить оптимальную массу\n"
+		<< "2 - Запустить симмуляцию\n"
+		<< "0 - Выход\n";
+}
+
+void menuPos1() {
+	//sc_LRE.calculateOptimalMass(planet);
+	sc_PAR.calculateOptimalMass(planet);
+}
+
+void menuPos2() {
+	/*
+
+	int delayCount=0;
+	int drawCount = 0;
+	graph.lines[0].vertex.clear();
+	sc_LRE.sc_Initialize(planet);
+
+
+	while (!(sc_LRE.position.y < H_EPS * 2 && abs(sc_LRE.velocity.y) < V_EPS) && ! sc_LRE.landed) {
+
+		sc_LRE.control();
+		sc_LRE.dynamic(planet);
+		
+		if (drawCount >= DRAW_RATE) {
+			drawSpaceCraft(0, sc_LRE);
+			drawCount = 0;
+			printf("t %-10.3f  y %-10.5f  v %-10.2f  phi %-5.2f  mt %-10.3f\tq %-10.3f\n",
+				sc_LRE.time,
+				sc_LRE.position.y,
+				sc_LRE.vecLength(sc_LRE.velocity),
+				sc_LRE.phi * 180 / PI,
+				sc_LRE.mt,
+				pow(sc_LRE.vecLength(sc_LRE.velocity),2)*planet.getDensityByHeight(sc_LRE.position.y)*0.5);
+			
+
+		}
+		drawCount++;
+		
+	}
+	drawSpaceCraft(0, sc_LRE);
+	printf("y %-10.2f  v %-10.2f  phi %-5.2f  mt %-10.3f\n",
+		sc_LRE.position.y,
+		sc_LRE.vecLength(sc_LRE.velocity),
+		sc_LRE.phi * 180 / PI,
+		sc_LRE.mt);
+
+	printf("x %2f\ty %2f\tv %3f\tVx %2f\tVy %4f\tphi %2.2f\t fuel mass %2.2f\n", sc_LRE.position.x, sc_LRE.position.y,
+		sc_LRE.vecLength(sc_LRE.velocity), sc_LRE.velocity.x,
+		sc_LRE.velocity.y, sc_LRE.phi * 180 / PI,sc_LRE.fuelMass);
+	printf("max Overload %-5.2f", sc_LRE.maxOverLoad);
+	*/
+
+	int delayCount = 0;
+	int drawCount = 0;
+	graph.lines[0].vertex.clear();
+	sc_PAR.initialize(planet);
+
+
+	while (!(sc_PAR.position.y < H_EPS * 2 && abs(sc_PAR.velocity.y) - V_LANDING < V_EPS ) && !sc_PAR.landed) {
+
+		sc_PAR.control(planet.getDensityByHeight(sc_PAR.position.y));
+		sc_PAR.dynamic(planet);
+
+		if (drawCount >= DRAW_RATE) {
+			drawSpaceCraft(0, sc_PAR);
+			drawCount = 0;
+			printf("t %-10.3f  y %-10.5f  v %-10.2f  phi %-5.2f  mt %-10.3f\tq %-10.3f deployed %-5d parType %2d\n",
+				sc_PAR.time,
+				sc_PAR.position.y,
+				sc_PAR.vecLength(sc_PAR.velocity),
+				sc_PAR.phi * 180 / PI,
+				sc_PAR.mfuel,
+				pow(sc_PAR.vecLength(sc_PAR.velocity), 2) * planet.getDensityByHeight(sc_PAR.position.y) * 0.5,
+				sc_PAR.parashuteDeployed,
+				sc_PAR.parashuteType);
+
+
+		}
+		drawCount++;
+
+	}
+	drawSpaceCraft(0, sc_PAR);
+	printf("y %-10.2f  v %-10.2f  phi %-5.2f  mt %-10.3f\n",
+		sc_PAR.position.y,
+		sc_PAR.vecLength(sc_PAR.velocity),
+		sc_PAR.phi * 180 / PI,
+		0);
+
+	printf("x %2f\ty %2f\tv %3f\tVx %2f\tVy %4f\tphi %2.2f\t fuel mass %2.2f\n", sc_PAR.position.x, sc_PAR.position.y,
+		sc_PAR.vecLength(sc_PAR.velocity), sc_PAR.velocity.x,
+		sc_PAR.velocity.y, sc_PAR.phi * 180 / PI, sc_PAR.mfuel);
+	printf("max Overload %-5.2f", sc_PAR.maxOverLoad);
+}
+
+
+
+
+
+
+
+
 // Методы -конец-
 
 int main()
 {
 
-	
+	setlocale(LC_ALL, "Russian");
 	
 	string anyThing;
 	string input;
+	int command;
+	bool runLoop = true;
 	
    
 	graph.initializeAxis();
@@ -104,86 +235,42 @@ int main()
 	graph.initializeIcon(0, 3, 5, sf::Color{ 255,0,130 });
 	graph.scale_y_max();
 	graph.qx = graph.qy;
-	cout << "Graph_init_complete" << "\n"<<"Type any key to start\n";
-	cin >> anyThing;
+	cout << "Graph_init_complete" << "\n";
 
-	sc_LRE.calculateOptimalMass(planet);
+	
 
-	cout  << "Type any key to continue\n";
-	cin >> anyThing;
+	while (runLoop) {
 
-	int drawCount=0;
-
-	while (true) {
+		printMenu();
 		
-		sc_LRE.sc_Initialize(planet);
-
-
-		while (!(sc_LRE.position.y < H_EPS * 2 && abs(sc_LRE.velocity.y) < V_EPS)) {//(sc_LRE.position.y<H_EPS*2 && abs(sc_LRE.velocity.y)<0.1)
-
-			sc_LRE.control();
-			sc_LRE.dynamic(planet);
-			//printf("x %2f\ty %2f\tv %3f\tphi %3f\tVx %2f\tVy %4f\n", spaceCraft.position.x, spaceCraft.position.y,
-			//	spaceCraft.vecLength(spaceCraft.velocity), spaceCraft.phi*180/3.1415,spaceCraft.velocity.x,
-			//	spaceCraft.velocity.y);
-			if (drawCount >= DRAW_RATE) {
-				drawSpaceCraft(0, sc_LRE);
-				drawCount = 0;
-				printf("t %-10.3f  y %-10.5f  v %-10.2f  phi %-5.2f  mt %-10.3f\n",
-					sc_LRE.time,
-					sc_LRE.position.y,
-					sc_LRE.vecLength(sc_LRE.velocity),
-					sc_LRE.phi * 180 / PI,
-					sc_LRE.mt);
-				//printf("t %.2f\tfoverLOAD %0.2f\tmaxOL %.2f\n",sc_LRE.time, sc_LRE.overLoad,sc_LRE.maxOverLoad);
-				//printf("alpha %0.3f\n", sc_LRE.alpha);
-
-			}
-			drawCount++;
-
-			//printf("thrustX %.2f\tthrustY %.2f\n", sc_LRE.thrustVector.x * sc_LRE.engOn, sc_LRE.thrustVector.y * sc_LRE.engOn);
+		while (!(cin >> command)) {
+			cin.clear();
+			cin.ignore(numeric_limits<streamsize>::max(), '\n');
+			cout << "Invalid input\n";
 		}
-		drawSpaceCraft(0, sc_LRE);
-		printf("y %-10.2f  v %-10.2f  phi %-5.2f  mt %-10.3f\n",
-			sc_LRE.position.y,
-			sc_LRE.vecLength(sc_LRE.velocity),
-			sc_LRE.phi * 180 / PI,
-			sc_LRE.mt);
 
-		printf("x %2f\ty %2f\tv %3f\tVx %2f\tVy %4f\tphi %3f\n", sc_LRE.position.x, sc_LRE.position.y,
-			sc_LRE.vecLength(sc_LRE.velocity), sc_LRE.velocity.x,
-			sc_LRE.velocity.y, sc_LRE.phi * 180 / PI);
-		printf("max Overload %-5.2f", sc_LRE.maxOverLoad);
-
-		printf("\nType any key to restart = == = == = == = Type 0 to exit\n");
-		cin >> input;
-		if (input=="0") {
-			printf("\nExit\n");
+		switch (command) {
+		case 1: 
+			menuPos1();
 			break;
+		case 2:
+			menuPos2();
+			break;
+		case 0:
+			runLoop = false;
+			break;
+		default:
+			break;
+
 		}
-		else {
-			printf("\n Restart\n");
-			graph.lines[0].vertex.clear();
-		}
+
+
 
 	}
 
-	/*
-	while (spaceCraft.position.y > 0) {
-		spaceCraft.dynamic(planet);
-		//printf("x %2f\ty %2f\tv %3f\tphi %3f\tVx %2f\tVy %4f\n", spaceCraft.position.x, spaceCraft.position.y,
-		//	spaceCraft.vecLength(spaceCraft.velocity), spaceCraft.phi*180/3.1415,spaceCraft.velocity.x,
-		//	spaceCraft.velocity.y);
-		drawSpaceCraft(0, spaceCraft);
-		printf("x %2f\ty %2f\tv %3f\tVx %2f\tVy %4f\tphi %3f\n",spaceCraft.position.x,  spaceCraft.position.y,
-			spaceCraft.vecLength(spaceCraft.velocity),spaceCraft.velocity.x,
-			spaceCraft.velocity.y,spaceCraft.phi*180/PI);
-	}
+	
 
-	*/
-
-	cout << "\n\nPrint anything\n";
-	cin >> anyThing;
+	
 
 	return 0;
 
