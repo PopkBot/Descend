@@ -6,6 +6,7 @@
 #include "SFML/Graphics.hpp"
 #include "excelExporter.h"
 #include "Planet.h"
+#include "DecendVehicle.h"
 
 //Импорт -конец-
 
@@ -18,14 +19,14 @@
 #define PI 3.1415926535897932384
 #define H_EPS 0.1
 #define MASS_EPS 1
-#define V_EPS 0.1
+#define V_EPS 0.5
 #define H_IGNITION_INITIAL 0
 #define G_EARTH 9.81
 
 //Объявление констант -конец-
 
 
-class SC_LRE
+class SC_LRE : public DecendVehicle
 {
 
 public:
@@ -49,7 +50,7 @@ public:
 	float cX=0;
 	float cY=0;
 	float midSurfase=0;
-	double phi=0;
+	
 	float alpha=0;
 	float gamma=0;
 	float alphaDescend =  -1.0 / 180.0 * PI;
@@ -67,13 +68,12 @@ public:
 	float hIgnition = 0;
 
 	bool bcolibration = false;
-	bool landed = false;
+	//bool landed = false;
 
-	sf::Vector2f velocity;
-	sf::Vector2f position;
-	sf::Vector2f relVelocity;
+	
+	
 	sf::Vector2f thrustVector = sf::Vector2f{ 0,0 };
-	sf::Vector2f windForce;
+
 
 	double machArray[FILE_RESOLUTION];
 	double cXMachArray[FILE_RESOLUTION];
@@ -98,7 +98,7 @@ public:
 
 	SC_LRE(string fileName, string matrixParFileName) {
 
-
+		printf("\LRE vehicle\n");
 		double dataArray[SC_LRE_MATRIX_PARAPMS][FILE_RESOLUTION];
 
 		excelExporter.extractMatrixFromFile(SC_LRE_MATRIX_PARAMS_DIR, matrixParFileName, dataArray, FILE_RESOLUTION, SC_LRE_MATRIX_PARAPMS);
@@ -175,7 +175,7 @@ public:
 
 	}
 
-	void sc_Initialize(Planet &planet) {
+	void initialize(Planet &planet)override {
 
 		
 		//totalMass = massSC;
@@ -203,6 +203,32 @@ public:
 		//printf("total mass %2f\tg0 %.2f\tthrust %.2f\n", totalMass, g0, thrust);
 	}
 
+	void printStats()override {
+		printf("t %-10.3f  y %-10.5f  v %-10.2f  phi %-5.2f  mt %-10.3f\n",
+			time,
+			position.y,
+			vecLength(velocity),
+			phi * 180 / PI,
+			mt);
+			
+	}
+
+	void printFinalStats()
+		override {
+
+		printf("y %-10.2f  v %-10.2f  phi %-5.2f  mt %-10.3f\n",
+			position.y,
+			vecLength(velocity),
+			phi * 180 / PI,
+			mt);
+
+		printf("x %2f\ty %2f\tv %3f\tVx %2f\tVy %4f\tphi %2.2f\t fuel mass %2.2f\n", position.x, position.y,
+			vecLength(velocity), velocity.x,
+			velocity.y, phi * 180 / PI, fuelMass);
+		printf("max Overload %-5.2f", maxOverLoad);
+
+	}
+
 	void printMatrixParams() {
 		for (int i = 0; i < FILE_RESOLUTION; i++) {
 			printf("Mach %-10.2f  CxM %-10.2f  AAtack %-10.2f  CxA %-10.2f  L/D %-10.2f\n", 
@@ -215,7 +241,7 @@ public:
 		}
 	}
 
-	void dynamic(Planet& planet) {
+	void dynamic(Planet& planet)override {
 
 		
 		sf::Vector2f acselGlobal;
@@ -294,7 +320,7 @@ public:
 
 
 		time += dt;
-
+		/*
 		if (position.y < H_EPS && bcolibration) {
 			
 		}
@@ -311,11 +337,15 @@ public:
 			landed = true;
 			
 		}
+		*/
+		if (position.y < H_EPS ) {	//&& abs(velocity.y) < V_EPS
+			landed = true;
+		}
 
 		//printf("t %2f\t", time);
 	}
 
-	void control() {
+	void control(Planet& planet)override {
 
 		
 
@@ -425,12 +455,14 @@ public:
 			delta = massSC + propellantMass * (aCoef(propellantMass) + 1) + totMass * (gammaCoefSC(totMass * g0 * overLoadCoef) * overLoadCoef - 1);
 			//printf("delta %-10.2f\ttotM %-10.2f\tfuelSys %-10.2f\tpropS %-10.2f\n", delta, totMass, propellantMass * (aCoef(propellantMass) + 1), gammaCoefSC(totMass * g0 * overLoadCoef) * overLoadCoef*totMass);
 		}
-		
+		if (propellantMass == 0) {
+			totMass = massSC;
+		}
 
 		return totMass;
 	}
 
-	void calculateOptimalMass(Planet& planet) {
+	void calculateOptimalMass(Planet& planet)override {
 
 		
 		double h;
@@ -463,7 +495,7 @@ public:
 
 		
 		hIgnition = 0;// params[7] / 2;
-		sc_Initialize(planet);
+		initialize(planet);
 		printf("total mass %2f\tg0 %.2f\tthrust %.2f\n", totalMass, g0, thrust);
 			
 
@@ -579,7 +611,7 @@ public:
 
 				fuelMass += dmt;
 				hIgnition = 0;
-				sc_Initialize(planet);
+				initialize(planet);
 
 
 
@@ -613,7 +645,7 @@ public:
 
 		
 		
-		sc_Initialize(planet);
+		initialize(planet);
 		bcolibration = false;
 		
 		printf("\n\nIgnition height caclulation completed hIgnition = %.3f\n\n", hIgnition);
@@ -639,15 +671,15 @@ public:
 			for (int desAng = -10; desAng <= (int)(angleAttackArray[FILE_RESOLUTION - 1] * 180 / PI); desAng += 1) {
 
 				alphaDescend = desAng / 180.0 * PI;
-				sc_Initialize(planet);
+				initialize(planet);
 				while (!(vecLength(velocity) < 100) && position.y>0)
 				{
-					control();
+					control(planet);
 					dynamic(planet);
 					//printf("y %.2f\n", position.y);
 
 				}
-				//printf("desAng %-5f  maxOL %-5.2f\n", desAng*1.0,maxOverLoad);
+				//printf("decAng %-5f  maxOL %-5.2f\n", desAng*1.0,maxOverLoad);
 				if (maxOverLoad < lowestMaxOL) {
 					lowestMaxOL = maxOverLoad;
 					descendAngleMinOL = alphaDescend;
@@ -670,11 +702,11 @@ public:
 	
 		while (true)
 		{
-			sc_Initialize(planet);
+			initialize(planet);
 			//while (abs(velocity.y)>0.1) {
 			while (!(position.y < (H_EPS * 2) && abs(velocity.y) < V_EPS)) {
 
-				control();
+				control(planet);
 				dynamic(planet);
 				
 			}

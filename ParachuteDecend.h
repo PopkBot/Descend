@@ -1,6 +1,6 @@
 #pragma once
 
-
+#include "excelExporter.h"
 #include "DecendVehicle.h"
 #include <math.h>
 
@@ -10,9 +10,9 @@
 
 #define H_EPS 0.1
 #define MASS_EPS 1
-#define V_EPS 0.1
+#define V_EPS 0.5
 #define V_DECEND 1
-#define V_LANDING 6
+#define V_LANDING 0
 
 #define LANDING_OVERLOAD 6
 #define THRUST_SPEC_IMP 2300
@@ -33,6 +33,7 @@ class ParachuteDecend : public DecendVehicle
 
 public:
 
+	ExcelExporter excelExporter;
 	double params[PARACHUTE_PARAMS_COUNT];
 
 	double machArray[FILE_RESOLUTION];
@@ -46,6 +47,7 @@ public:
 	double parSysMass = 0;
 	double hz = 100;
 	double g0;
+	double currentQ = 0;
 
 	float fuelMass = 0;
 	float mfuel = 0;
@@ -53,6 +55,7 @@ public:
 	float ignitionHight = 0;
 	float IgnitionVel = 0;
 	float thrustMass = 0;
+
 	
 	float maxQH = 0;
 	float cP[3];
@@ -75,6 +78,7 @@ public:
 
 	ParachuteDecend(string fileName, string matrixParFileName) {
 
+		printf("\nPar vehicle\n");
 		double dataArray[PARACHUTE_MATRIX_PARAPMS][FILE_RESOLUTION];
 
 		excelExporter.extractMatrixFromFile(PARACHUTE_MATRIX_PARAMS_DIR, matrixParFileName, dataArray, FILE_RESOLUTION, PARACHUTE_MATRIX_PARAPMS);
@@ -108,11 +112,25 @@ public:
 
 		parashuteDeployed = false;
 		mainParashuteAvailable = true;
-
+		printMatrixParams();
 
 	}
 
-	void initialize(Planet& planet) {
+	void printMatrixParams() {
+		for (int i = 0; i < FILE_RESOLUTION; i++) {
+			printf("Mach %-10.2f  CxM %-10.2f  AAtack %-10.2f  CxA %-10.2f  L/D %-10.2f\n",
+				machArray[i],
+				cXMachArray[i],
+				angleAttackArray[i] / PI * 180,
+				cXAtackArray[i],
+				adRatioAngleArray[i]);
+
+		}
+	}
+
+	void initialize(Planet& planet)
+		override
+	{
 
 
 		massSC = params[0];						//Масса КА
@@ -148,9 +166,39 @@ public:
 		}
 	}
 
-	void control(double density) {
+	void printStats()
+		override 
+	{
+		printf("t %-10.3f  y %-10.5f  v %-10.2f  phi %-5.2f  mt %-10.3f\tq %-10.3f deployed %-5d parType %2d\n",
+			time,
+			position.y,
+			vecLength(velocity),
+			phi * 180 / PI,
+			mfuel,
+			currentQ,
+			parashuteDeployed,
+			parashuteType);
+	}
 
-		double currentQ = density * pow(vecLength(velocity), 2) / 2.0;
+	void printFinalStats()
+		override
+	{
+		printf("y %-10.2f  v %-10.2f  phi %-5.2f  mt %-10.3f\n",
+			position.y,
+			vecLength(velocity),
+			phi * 180 / PI,
+			0);
+
+		printf("x %2f\ty %2f\tv %3f\tVx %2f\tVy %4f\tphi %2.2f\t fuel mass %2.2f\n", position.x, position.y,
+			vecLength(velocity), velocity.x,
+			velocity.y, phi * 180 / PI, mfuel);
+		printf("max Overload %-5.2f", maxOverLoad);
+	}
+
+	void control(Planet& planet)
+		override {
+
+		double currentQ = planet.getDensityByHeight(position.y) * pow(vecLength(velocity), 2) / 2.0;
 
 		parashuteDeployed = false;
 		//printf("\nflag00");
@@ -192,7 +240,8 @@ public:
 
 	}
 
-	void dynamic(Planet& planet) {
+	void dynamic(Planet& planet)override
+	{
 
 
 		sf::Vector2f acselGlobal;
@@ -205,7 +254,7 @@ public:
 
 		float dAlpha = windSpeed * cos(phi) / vecLength(velocity);
 
-
+		currentQ = pow(vecLength(velocity), 2) * planet.getDensityByHeight(position.y) * 0.5;
 		relVelocity = velocity - sf::Vector2f{ windSpeed,0 };
 
 
@@ -287,6 +336,10 @@ public:
 		}
 		*/
 
+		if (position.y < H_EPS  ) {	//&& abs(velocity.y) - V_LANDING < V_EPS
+			landed = true;
+		}
+
 		//printf("t %2f\t", time);
 	
 	}
@@ -353,8 +406,9 @@ public:
 
 	}
 
-
-	void calculateOptimalMass(Planet& planet) {
+	void calculateOptimalMass(Planet& planet)
+		override
+	{
 
 		double g0 = (planet.gravPar / planet.radius) / planet.radius;
 
@@ -382,7 +436,7 @@ public:
 			
 			while ( position.y > H_EPS ) {
 
-				control(planet.getDensityByHeight(position.y));
+				control(planet);
 				dynamic(planet);
 				if (planet.getDensityByHeight(position.y) * pow(vecLength(velocity), 2) / 2.0 > maxQ) {
 
@@ -503,7 +557,7 @@ public:
 			mfuel = fuelMass;
 			IgnitionVel = optimalParVel;
 			ignitionHight = getIgnitionHight(g0, optimalParVel, V_LANDING);
-			//findOptimalDescendAngle(planet);
+			findOptimalDescendAngle(planet);
 			//printf("\nmTPx %10.2f mTP %10.2f mOP %10.2f\n", mTPx / parashuteDensity[ParashuteType::DRAG], mTP / parashuteDensity[ParashuteType::DRAG], mOP / parashuteDensity[ParashuteType::MAIN]);
 			bcolibration = false;
 			float fuelBuff = fuelMass;
@@ -520,7 +574,7 @@ public:
 				//while (abs(velocity.y)>0.1) {
 				while (!(position.y < (H_EPS * 2) && abs(velocity.y) - V_LANDING < V_EPS)) {
 
-					control(planet.getDensityByHeight(position.y));
+					control(planet);
 					dynamic(planet);
 					//printf("hIgn %.4f\t\tY %.4f\t\tvy %.5f fuel mass %-10.2f\n", ignitionHight, position.y, velocity.y, mfuel);
 					if (drawCount >= 20) {
@@ -547,7 +601,7 @@ public:
 			initialize(planet);
 			while (!(position.y < (H_EPS * 2) && abs(velocity.y) - V_LANDING < V_EPS)) {
 
-				control(planet.getDensityByHeight(position.y));
+				control(planet);
 				dynamic(planet);
 				//printf("hIgn %.4f\t\tY %.4f\t\tvy %.5f tot mass %-10.2f\n", ignitionHight, position.y, velocity.y, totalMass);
 			}
@@ -690,7 +744,7 @@ public:
 				initialize(planet);
 				while (!(vecLength(velocity) < 100) && position.y > 0)
 				{
-					control(planet.getDensityByHeight(position.y));
+					control(planet);
 					dynamic(planet);
 					//printf("y %.2f\n", position.y);
 

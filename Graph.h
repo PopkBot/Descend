@@ -5,7 +5,7 @@
 
 #define windowWidth 1000
 #define windowHeigth 500
-#define lineCount 1
+#define lineCount 2
 
 #define maxH 10
 #define maxD 20
@@ -31,6 +31,7 @@ public:
 		sf::ConvexShape convex;
 		float convRadius;
 		bool bdraw = false;
+		sf::Color color;
 	};
 
 
@@ -200,19 +201,26 @@ public:
 		}
 	}
 
-	void initializeIcon(int lineNum,int pointsCount, float radius, sf::Color color) {
+	void clearLines() {
+		for (int i = 0; i < lineCount;i++) {
+			lines[i].vertex.clear();
+		}
+	}
 
+	void initializeIcon(int lineNum,int pointsCount, float radius, sf::Color iconColor, sf::Color lineColor) {
+		
 		if (lineNum > lineCount)
 			return;
 		else {
-
 			lines[lineNum].convex.setPointCount(pointsCount);
 			lines[lineNum].convRadius = radius;
-			lines[lineNum].convex.setFillColor(color);
-			lines[lineNum].convex.setOutlineColor(color);
-
+			lines[lineNum].convex.setFillColor(iconColor);
+			lines[lineNum].convex.setOutlineColor(iconColor);
+			lines[lineNum].color = lineColor;
+			
 		}
 
+		
 	}
 
 	void drawIcon(int lineNum, float angle) {
@@ -241,7 +249,7 @@ public:
 		//vertexs.position = sf::Vector2f(lines[lineN].x + axis.x0, -ny * qy + axis.y0);
 		vertexs.position = sf::Vector2f(nx*qx + axis.x0, -ny * qy + axis.y0);
 		//printf("\nx= %3f\ty= %3f\n", lines[lineN].x, -ny * 10 + 400.0f);
-		vertexs.color = sf::Color::Red;
+		vertexs.color = lines[lineN].color;
 
 		lines[lineN].bDrawLine = true;
 
@@ -390,7 +398,7 @@ public:
 			}
 
 			for (int i = 0; i < lineCount; i++) {
-
+				
 				for (int j = 0; j < lines[i].vertex.size(); j++) {
 					//lines[i].vertex[j].position.x = axis.x0 * (1 - (axisR.x0 - 20) / ( maxX))
 					//	+ lines[i].vertex[j].position.x * (axisR.x0 - 20) / (maxX);
@@ -399,8 +407,11 @@ public:
 						(maxX - axis.x0) + axis.x0;
 
 				}
-
-
+				//for (int j = 0; i < lines[i].convex.getPointCount(); i++) {
+				//	lines[i].convex.setPoint(j, sf::Vector2f{ (lines[i].convex.getPoint(j).x - axis.x0) * (axisR.x0 - maxD - axis.x0) /
+				//		(maxX - axis.x0) + axis.x0
+				//		,lines[i].convex.getPoint(j).y });
+				//}
 			}
 			qx = qx * (axisR.x0 - maxD-axis.x0) / (maxX-axis.x0);
 

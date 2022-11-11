@@ -4,7 +4,7 @@
 
 #include "SFML/Graphics.hpp"
 #include "Planet.h"
-#include "excelExporter.h"
+
 
 
 #define PI 3.1415926535897932384
@@ -15,7 +15,7 @@ class DecendVehicle
 {
 public:
 
-	ExcelExporter excelExporter;
+	
 	float totalMass;
 	float massSC;
 	float cX = 0;
@@ -37,17 +37,21 @@ public:
 	sf::Vector2f relVelocity;
 	sf::Vector2f windForce;
 
-	//virtual void initialize(Planet& planet);
+	virtual void initialize(Planet& planet) {}
 
-	//virtual void control();
+	virtual void control(Planet& planet) {}
 
-	//virtual void dynamic(Planet& planet);
+	virtual void dynamic(Planet& planet) {}
 
 	//virtual double cxCoefficient(double v, double angleA, double h, Planet& planet);
 
 	//virtual double cyCoefficient(double v, double angleA, double h, Planet& planet, double cxC);
 
-	//virtual void calculateOptimalMass(Planet& planet);
+	virtual void calculateOptimalMass(Planet& planet) {}
+
+	virtual void printStats() {}
+
+	virtual void printFinalStats() {}
 
 	double dot(sf::Vector2f vec1, sf::Vector2f vec2) {
 		double dott = vec1.x * vec2.x + vec1.y * vec2.y;

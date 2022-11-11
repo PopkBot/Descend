@@ -52,7 +52,7 @@ public:
 	Planet(string fileName) {
 
 		double dataArray[ATMOSPHERE_PARAMETRS_COUNT][FILE_RESOLUTION];
-		excelExporter.extractMatrixFromFile(MATRIX_DIRECTORY,fileName+ ATMOSPHERE_FILE_NAME,dataArray, FILE_RESOLUTION, ATMOSPHERE_PARAMETRS_COUNT);
+		excelExporter.extractMatrixFromFile(MATRIX_DIRECTORY,fileName + ATMOSPHERE_FILE_NAME,dataArray, FILE_RESOLUTION, ATMOSPHERE_PARAMETRS_COUNT);
 		
 		for (int i = 0; i < FILE_RESOLUTION; i++) {
 			heightStep[i] = dataArray[0][i];
