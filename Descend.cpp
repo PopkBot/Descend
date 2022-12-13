@@ -54,7 +54,7 @@ double simSpeed = 0;
 
 
 void graphs() {
-	graph.initialize();
+	graph.initialize(planet);
 }
 
 void drawSpaceCraft(int lineNum,SpaceCraft &sc) {

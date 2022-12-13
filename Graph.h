@@ -3,6 +3,8 @@
 #include <algorithm>
 //#include <vector>
 
+#include "Planet.h"
+
 #define windowWidth 1000
 #define windowHeigth 500
 #define lineCount 1
@@ -34,6 +36,24 @@ public:
 		sf::Color color;
 	};
 
+	struct Gradient {
+		
+		sf::VertexArray skyShape =  sf::VertexArray(sf::Quads,4);
+		/*skyShape[0].Position = sf::Vector2f(0, h);
+		skyShape[0].Color = horizonColour;
+		skyShape[1].Position = sf::Vector2f(w, h);
+		skyShape[1].Color = horizonColour;
+		skyShape[2].Position = sf::Vector2f(w, 0);
+		skyShape[2].Color = zenithColour;
+		skyShape[3].Position = sf::Vector2f(0, 0);
+		skyShape[3].Color = zenithColour;*/
+
+		
+
+	};
+
+
+
 
 	sf::Font font;
 
@@ -51,9 +71,14 @@ public:
 
 	StLines lines[lineCount];
 
+	Gradient gradient;
+
 	bool bCheck_y = false,
 		bScale_y = false,
 		bScale_x=false;
+
+	bool isPlanet = false;
+
 	float
 		qy = 2,
 		qx = 2,
@@ -85,6 +110,8 @@ public:
 		if (!font.loadFromFile("Fonts\\arial.ttf")) {
 			printf("\nerror=======================================\n");
 		}
+
+		isPlanet = false;
 
 		//Инициализация окна -конец-
 
@@ -209,6 +236,181 @@ public:
 
 		}
 	}
+
+	void initialize(Planet &planet) {
+
+		//Инициализация окна -начало-
+		sf::RenderWindow window(sf::VideoMode(windowWidth, windowHeigth), "Tracing", sf::Style::Titlebar | sf::Style::Close); //Titlebar | sf::Style::Close
+		window.setFramerateLimit(60);
+		window.setPosition(sf::Vector2i(830, 0));
+
+		sf::RenderTexture empityTexture;
+		empityTexture.create(windowWidth, windowHeigth);
+		sf::Sprite empitySprite = sf::Sprite(empityTexture.getTexture());
+
+		
+
+		shader.setUniform("u_resolution", sf::Vector2f(windowWidth, windowHeigth));
+
+
+		if (!font.loadFromFile("Fonts\\arial.ttf")) {
+			printf("\nerror=======================================\n");
+		}
+
+		isPlanet = true;
+		
+		//Инициализация окна -конец-
+
+		//Инициализация текста -начало-
+
+		tmaxV.setPosition(axisR.x0 + 10, 30);
+		tmaxV.setFillColor(sf::Color{ 150,150,150 });
+		tmaxV.setFont(font);
+		tmaxV.setCharacterSize(15);
+
+		tmaxX.setPosition(axisR.x0 + 10, axis.y0 + 10);
+		tmaxX.setFillColor(sf::Color{ 150,150,150 });
+		tmaxX.setFont(font);
+		tmaxX.setCharacterSize(15);
+
+		//Инициализация текста -начало-
+
+
+		sf::RenderStates states;
+		sf::Transform transform;
+		states.transform = transform;
+
+		while (window.isOpen()) {
+
+
+			sf::Event event;
+
+			while (window.pollEvent(event))
+			{
+
+
+
+				if (event.type == sf::Event::Closed)
+				{
+
+					window.close();
+				}
+
+				if (event.type == sf::Event::KeyPressed) {
+					if (event.key.code == sf::Keyboard::Escape) {
+						window.close();
+					}
+					if (event.key.code == sf::Keyboard::Space) {
+						//drawline(10, 0);
+						toEqualScale();
+					}
+					if (event.key.code == sf::Keyboard::W) {
+
+
+
+					}
+					if (event.key.code == sf::Keyboard::S) {
+
+
+
+
+					}
+
+				}
+				else if (event.type == sf::Event::KeyReleased)
+				{
+					if (event.key.code == sf::Keyboard::Space) {
+
+					}
+					if (event.key.code == sf::Keyboard::W) {
+
+					}
+
+
+				}
+
+			}
+
+			char buffer[50];
+
+			std::snprintf(buffer, 50, "%.2f", axis.y0 / (qy));
+			tmaxV.setString(buffer);
+
+			std::snprintf(buffer, 50, "%.2f", axisR.x0 / (qx));
+			tmaxX.setString(buffer);
+
+
+
+			window.clear();
+
+
+			scale_x_max();
+
+			scale_y_max();
+			toEqualScale();
+
+			//Отрисовка объектов -начало-
+
+
+			
+			window.draw(setGradient(planet).skyShape);
+
+			window.draw(&axis.xAxis[0], axis.xAxis.size(), sf::LinesStrip);
+			window.draw(&axis.yAxis[0], axis.yAxis.size(), sf::LinesStrip);
+			window.draw(&axisR.yAxis[0], axisR.yAxis.size(), sf::LinesStrip);
+			window.draw(tmaxV);
+			window.draw(tmaxX);
+
+			for (int i = 0; i < lineCount; i++) {
+				if (lines[i].bdraw) {
+					window.draw(lines[i].text);
+					window.draw(lines[i].textX);
+					window.draw(&lines[i].posLine_Y[0], 2, sf::LinesStrip);
+					window.draw(&lines[i].posLine_X[0], 2, sf::LinesStrip);
+					window.draw(&lines[i].vertex[0], lines[i].vertex.size(), sf::LinesStrip);
+					window.draw(lines[i].convex);
+				}
+
+			}
+
+			window.display();
+
+			//Отрисовка объектов -конец-
+
+
+
+
+
+
+
+
+		}
+	}
+
+
+	Gradient setGradient(Planet &planet) {
+
+		Gradient grad;
+
+		float yMax =axis.y0 - qy * planet.atmosphereHight;
+		sf::Color botColor = sf::Color{ 18, 174, 222 ,100 };
+		sf::Color upperColor = sf::Color{ 0, 0, 0 ,0 };
+
+		sf::VertexArray skyShape = sf::VertexArray(sf::Quads, 4);
+		skyShape[0].position = sf::Vector2f(axis.x0, axis.y0);
+		skyShape[0].color =botColor;
+		skyShape[1].position = sf::Vector2f(axisR.x0, axis.y0);
+		skyShape[1].color = botColor;
+		skyShape[2].position = sf::Vector2f(axisR.x0, yMax);
+		skyShape[2].color = upperColor;
+		skyShape[3].position = sf::Vector2f(axis.x0, yMax);
+		skyShape[3].color = upperColor;
+
+		grad.skyShape = skyShape;
+
+		return grad;
+	}
+
 
 	void clearLines() {
 		for (int i = 0; i < lineCount;i++) {
