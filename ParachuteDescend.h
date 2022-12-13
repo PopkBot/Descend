@@ -1,18 +1,20 @@
 #pragma once
 
 #include "excelExporter.h"
-#include "DecendVehicle.h"
+#include "DescendVehicle.h"
 #include <math.h>
 
 
 #define PARACHUTE_PARAMS_COUNT 13
-#define PARACHUTE_MATRIX_PARAPMS 5
+#define PARACHUTE_MATRIX_PARAPMS 2
 
 #define H_EPS 0.1
 #define MASS_EPS 1
 #define V_EPS 0.5
-#define V_DECEND 1
-#define V_LANDING 0
+#define V_DECEND 10
+#define V_LANDING 0.1
+#define G0 9.81
+#define MAX_AOA 60
 
 #define LANDING_OVERLOAD 6
 #define THRUST_SPEC_IMP 2300
@@ -28,7 +30,7 @@ enum ParashuteType {
 };
 
 
-class ParachuteDecend : public DecendVehicle 
+class ParachuteDescend : public DescendVehicle 
 {
 
 public:
@@ -36,11 +38,7 @@ public:
 	ExcelExporter excelExporter;
 	double params[PARACHUTE_PARAMS_COUNT];
 
-	double machArray[FILE_RESOLUTION];
-	double cXMachArray[FILE_RESOLUTION];
-	double angleAttackArray[FILE_RESOLUTION];
-	double cXAtackArray[FILE_RESOLUTION];
-	double adRatioAngleArray[FILE_RESOLUTION];
+	
 
 	double parachuteDensity;
 	double parashuteDEployHight=0;
@@ -55,43 +53,42 @@ public:
 	float ignitionHight = 0;
 	float IgnitionVel = 0;
 	float thrustMass = 0;
+	
 
 	
 	float maxQH = 0;
 	float cP[3];
 	float parashuteDensity[3];
 	double parashuteSurface[3] = {1,1,1};
-	double maxQForParashute[3] = { 24060,			// 0.66 * 72900 / 2.0
-								1000,				// 0.8*2500/2.0
-								1125 };				// 0.9 * 2500 / 2.0
+	double maxQForParashute[3] = { 25060,			// 0.66 * 72900 / 2.0
+								3000,				// 0.8*2500/2.0
+								4000 };				// 0.9 * 2500 / 2.0
 
 	bool parashuteDeployed = false;
 	bool mainParashuteAvailable = true;
 	bool onlyDragPar = false;
 	bool thrustIsOn = false;
 	bool isParashute =true;
+	bool isDragCut = false;
 
 	
 	
 
 	ParashuteType parashuteType;
 
-	ParachuteDecend(string fileName, string matrixParFileName) {
+	ParachuteDescend(string fileName, string matrixParFileName) {
 
 		printf("\nPar vehicle\n");
 		double dataArray[PARACHUTE_MATRIX_PARAPMS][FILE_RESOLUTION];
 
-		excelExporter.extractMatrixFromFile(PARACHUTE_MATRIX_PARAMS_DIR, matrixParFileName, dataArray, FILE_RESOLUTION, PARACHUTE_MATRIX_PARAPMS);
+		ExcelExporter:: extractMatrixFromFile_ForSpaceCraft(PARACHUTE_MATRIX_PARAMS_DIR, matrixParFileName, dataArray, PARACHUTE_MATRIX_PARAPMS, cXMachArray, adRatioAngleArray);
 
 		for (int i = 0; i < FILE_RESOLUTION; i++) {
 			machArray[i] = dataArray[0][i];
-			cXMachArray[i] = dataArray[1][i];
-			angleAttackArray[i] = dataArray[2][i];
-			cXAtackArray[i] = dataArray[3][i];
-			adRatioAngleArray[i] = dataArray[4][i];
+			angleAttackArray[i] = dataArray[1][i];
 		}
 
-		excelExporter.extractDataFromFile(PARACHUTE_DIRECTORY, fileName, params, PARACHUTE_PARAMS_COUNT);
+		ExcelExporter::extractDataFromFile(PARACHUTE_DIRECTORY, fileName, params, PARACHUTE_PARAMS_COUNT);
 
 		massSC = params[0];						//Масса КА
 		totalMass = massSC + parSysMass;
@@ -116,17 +113,7 @@ public:
 
 	}
 
-	void printMatrixParams() {
-		for (int i = 0; i < FILE_RESOLUTION; i++) {
-			printf("Mach %-10.2f  CxM %-10.2f  AAtack %-10.2f  CxA %-10.2f  L/D %-10.2f\n",
-				machArray[i],
-				cXMachArray[i],
-				angleAttackArray[i] / PI * 180,
-				cXAtackArray[i],
-				adRatioAngleArray[i]);
-
-		}
-	}
+	
 
 	void initialize(Planet& planet)
 		override
@@ -160,6 +147,7 @@ public:
 		mfuel = fuelMass;
 		g0 = (planet.gravPar / planet.radius) / planet.radius;
 		thrustIsOn = false;
+		isDragCut = false;
 		overLoad = 6;
 		if (!bcolibration) {
 			totalMass = massSC + parSysMass + thrustMass;
@@ -209,25 +197,29 @@ public:
 			alpha = 0;
 		}
 		if (position.y < maxQH && isParashute) {
-			if (position.y < parashuteDEployHight && maxQForParashute[ParashuteType::DRAG] >= currentQ) {
+			if (/*position.y < parashuteDEployHight &&*/ maxQForParashute[ParashuteType::DRAG] >= currentQ) {
 				parashuteDeployed = true;
 				parashuteType = ParashuteType::DRAG;
-				//printf(" current q %10.2f maxQ %10.2f", currentQ, maxQForParashute[ParashuteType::DRAG]);
+				//printf(" \ny %-5.2f current q %10.2f maxQ %10.2f",position.y, currentQ, maxQForParashute[ParashuteType::DRAG]);
 			}
 			if (position.y < parashuteDEployHight && maxQForParashute[ParashuteType::MAIN] >= currentQ && !onlyDragPar) {
 				parashuteDeployed = true;
 				parashuteType = ParashuteType::MAIN;
+				if (!isDragCut) {
+					isDragCut = true;
+					totalMass -= parashuteSurface[ParashuteType::DRAG] * parashuteDensity[ParashuteType::DRAG];
+				}
 				//printf("\nflag01 current q %10.2f maxQ %10.2f", currentQ, maxQForParashute[ParashuteType::MAIN]);
 			}
-			if (!mainParashuteAvailable && position.y < parashuteDEployHight && maxQForParashute[ParashuteType::SPARE] >= currentQ) {
-				parashuteDeployed = true;
-				parashuteType = ParashuteType::SPARE;
+			//if (!mainParashuteAvailable && position.y < parashuteDEployHight && maxQForParashute[ParashuteType::SPARE] >= currentQ) {
+			//	parashuteDeployed = true;
+			//	parashuteType = ParashuteType::SPARE;
 				//printf("\nflag02");
-			}
-			if (parashuteDeployed && parashuteType == ParashuteType::MAIN && maxQForParashute[ParashuteType::MAIN] < currentQ) {
-				mainParashuteAvailable = false;
+			//}
+			//if (parashuteDeployed && parashuteType == ParashuteType::MAIN && maxQForParashute[ParashuteType::MAIN] < currentQ) {
+			//	mainParashuteAvailable = false;
 				//printf("\nflag03");
-			}
+			//}
 		}
 		if (position.y <= ignitionHight) {
 
@@ -336,7 +328,7 @@ public:
 		}
 		*/
 
-		if (position.y < H_EPS  ) {	//&& abs(velocity.y) - V_LANDING < V_EPS
+		if (position.y < H_EPS/10.0  ) {	//&& abs(velocity.y) - V_LANDING < V_EPS
 			landed = true;
 		}
 
@@ -344,67 +336,10 @@ public:
 	
 	}
 
-	double cxCoefficient(double v, double angleA, double h, Planet& planet) {
 
-		double cxCoef;
-		double cxA = 1;
-		double cxM = 1;
-		double machNo;
-		if (planet.getSonicSpeed(h) > 0) {
-			machNo = v / planet.getSonicSpeed(h);
-		}
-		else {
-			machNo = 0;
-		}
-
-		bool cxAFound = false;
-		bool cxMFound = false;
-
-		for (int i = 0; i < FILE_RESOLUTION; i++) {
-
-			if (angleA < angleAttackArray[i] && !cxAFound) {
-				cxA = (cXAtackArray[i] - cXAtackArray[i - 1]) / (angleAttackArray[i] - angleAttackArray[i - 1]) * (angleA - angleAttackArray[i - 1]) + cXAtackArray[i - 1];
-				cxAFound = true;
-			}
-			if (machNo < machArray[i] && !cxMFound) {
-				cxM = (cXMachArray[i] - cXMachArray[i - 1]) / (machArray[i] - machArray[i - 1]) * (machNo - machArray[i - 1]) + cXMachArray[i - 1];
-				cxMFound = true;
-			}
-
-		}
-
-		if (!cxAFound) {
-			cxA = cXAtackArray[FILE_RESOLUTION - 1];
-		}
-		if (!cxMFound) {
-			cxM = cXMachArray[FILE_RESOLUTION - 1];
-		}
-		cxCoef = cX * cxA * cxM;
-		return(cxCoef);
-
-	}
-
-	double cyCoefficient(double v, double angleA, double h, Planet& planet, double cxC) {
-
-		double ld = 0;
-		bool ldFound = false;
-
-		for (int i = 0; i < FILE_RESOLUTION; i++) {
-
-			if (angleA <= angleAttackArray[i] && !ldFound) {
-				ld = (adRatioAngleArray[i] - adRatioAngleArray[i - 1]) / (angleAttackArray[i] - angleAttackArray[i - 1]) * (angleA - angleAttackArray[i - 1]) + adRatioAngleArray[i - 1];
-				ldFound = true;
-
-			}
-		}
-		if (!ldFound) {
-			ld = adRatioAngleArray[FILE_RESOLUTION - 1];
-		}
-		//printf("\n cyccc %.5f\tcxC %0.2f\tld %.2f\tang %.2f\n", cxC * ld,cxC,ld,angleA);
-		return (cxC * ld);
+	
 
 
-	}
 
 	void calculateOptimalMass(Planet& planet)
 		override
@@ -475,73 +410,102 @@ public:
 
 			printf("\nOnly Par parSysMass %5.2f", parSysMass);
 			
-			for (float parDecVel = V_LANDING; parDecVel <= freeFallVelocity; parDecVel += 0.1) {
+			if (V_DECEND == 0) {
+
+				for (float parDecVel = V_LANDING; parDecVel <= freeFallVelocity; parDecVel += 0.1) {
+
+					initialize(planet);
+
+
+					cxCoef = cxCoefficient(parDecVel, 0, 0, planet);
+					cyCoef = cyCoefficient(parDecVel, 0, 0, planet, cxCoef);
+
+					qForce = cxCoef * pow(parDecVel, 2) * planet.getDensityByHeight(0) / 2 * midSurfase;
+					yForce = cyCoef * pow(parDecVel, 2) * planet.getDensityByHeight(0) / 2 * midSurfase;
+
+					windForce = -normalize(sf::Vector2f{ 0,-parDecVel }) * qForce + turnVector(normalize(sf::Vector2f{ 0,-parDecVel }), PI / 2) * yForce;
+
+					float thrMassBuf = getThrusterMass(parDecVel - V_LANDING, massSC);
+					totalMass += getThrusterMass(parDecVel - V_LANDING, massSC);
+
+
+
+
+					calculateParashute(windForce.y, parDecVel, planet, totalMass);
+					totalMass += parSysMass;
+
+					totalMass -= thrMassBuf;
+					totalMass += getThrusterMass(parDecVel - V_LANDING, totalMass);
+
+					if (totalMass < minMass) {
+						minMass = totalMass;
+						optimalParVel = parDecVel;
+					}
+					printf("\nparVel %-5.2f totalMass %-10.2f parSysMass %-10.2f thrMass %-5.2f", parDecVel, totalMass, parSysMass, getThrusterMass(parDecVel - V_LANDING, totalMass));
+
+				}
 
 				initialize(planet);
 
 
-				cxCoef = cxCoefficient(parDecVel, 0, 0, planet);
-				cyCoef = cyCoefficient(parDecVel, 0, 0, planet, cxCoef);
 
-				qForce = cxCoef * pow(parDecVel, 2) * planet.getDensityByHeight(0) / 2 * midSurfase;
-				yForce = cyCoef * pow(parDecVel, 2) * planet.getDensityByHeight(0) / 2 * midSurfase;
 
-				windForce = -normalize(sf::Vector2f{ 0,-parDecVel }) * qForce + turnVector(normalize(sf::Vector2f{ 0,-parDecVel }), PI / 2) * yForce;
-
-				float thrMassBuf = getThrusterMass(parDecVel - V_LANDING, totalMass);
-				totalMass += getThrusterMass(parDecVel - V_LANDING, totalMass);
-
-	
-			
-
-				calculateParashute(windForce.y, parDecVel, planet, massSC);
-				totalMass += parSysMass;
-
-				totalMass -=  thrMassBuf;
-				totalMass += getThrusterMass(parDecVel - V_LANDING, totalMass);
+				totalMass += getThrusterMass(freeFallVelocity - V_LANDING, totalMass);
 
 				if (totalMass < minMass) {
+					initialize(planet);
+					thrustMass = getThrusterMass(freeFallVelocity - V_LANDING, totalMass);
 					minMass = totalMass;
-					optimalParVel = parDecVel;
+					optimalParVel = freeFallVelocity;
+					isParashute = false;
+					parSysMass = 0;
+					//printf("\nflag0");
 				}
-				//printf("\nparVel %-5.2f totalMass %-10.2f parSysMass %-10.2f thrMass %-5.2f", parDecVel, totalMass,parSysMass, getThrusterMass(parDecVel - V_LANDING, totalMass));
+				else {
+					initialize(planet);
+					float thrMassBuf = getThrusterMass(optimalParVel - V_LANDING, totalMass);
+					totalMass += getThrusterMass(optimalParVel - V_LANDING, totalMass);
+					cxCoef = cxCoefficient(optimalParVel, 0, 0, planet);
+					cyCoef = cyCoefficient(optimalParVel, 0, 0, planet, cxCoef);
+					qForce = cxCoef * pow(optimalParVel, 2) * planet.getDensityByHeight(0) / 2 * midSurfase;
+					yForce = cyCoef * pow(optimalParVel, 2) * planet.getDensityByHeight(0) / 2 * midSurfase;
+					windForce = -normalize(sf::Vector2f{ 0,-optimalParVel }) * qForce + turnVector(normalize(sf::Vector2f{ 0,-optimalParVel }), PI / 2) * yForce;
+					calculateParashute(windForce.y, optimalParVel, planet, totalMass);
+					totalMass += parSysMass;
 
-			}
-
-			initialize(planet);
-
-
-			
-			
-			totalMass += getThrusterMass(freeFallVelocity - V_LANDING, totalMass);
-
-			if (totalMass < minMass) {
-				initialize(planet);
-				thrustMass = getThrusterMass(freeFallVelocity - V_LANDING, totalMass);
-				minMass = totalMass;
-				optimalParVel = freeFallVelocity;
-				isParashute = false;
-				parSysMass = 0;
-				//printf("\nflag0");
+					totalMass -= thrMassBuf;
+					thrustMass = getThrusterMass(optimalParVel - V_LANDING, totalMass);
+					totalMass += getThrusterMass(optimalParVel - V_LANDING, totalMass);
+					isParashute = true;
+					//printf("\nflag1");
+				}
 			}
 			else {
 				initialize(planet);
-				float thrMassBuf = getThrusterMass(optimalParVel - V_LANDING, totalMass);
-				totalMass += getThrusterMass(optimalParVel - V_LANDING, totalMass);
-				cxCoef = cxCoefficient(optimalParVel, 0, 0, planet);
-				cyCoef = cyCoefficient(optimalParVel, 0, 0, planet, cxCoef);
-				qForce = cxCoef * pow(optimalParVel, 2) * planet.getDensityByHeight(0) / 2 * midSurfase;
-				yForce = cyCoef * pow(optimalParVel, 2) * planet.getDensityByHeight(0) / 2 * midSurfase;
-				windForce = -normalize(sf::Vector2f{ 0,-optimalParVel }) * qForce + turnVector(normalize(sf::Vector2f{ 0,-optimalParVel }), PI / 2) * yForce;
-				calculateParashute(windForce.y, optimalParVel, planet, totalMass);
-				totalMass += parSysMass;
 
+				minMass = totalMass;
+				optimalParVel = V_DECEND;
+
+				float thrMassBuf = getThrusterMass(V_DECEND - V_LANDING, massSC);
+				totalMass += getThrusterMass(V_DECEND - V_LANDING, massSC);
+				cxCoef = cxCoefficient(V_DECEND, 0, 0, planet);
+				cyCoef = cyCoefficient(V_DECEND, 0, 0, planet, cxCoef);
+				qForce = cxCoef * pow(V_DECEND, 2) * planet.getDensityByHeight(0) / 2 * midSurfase;
+				yForce = cyCoef * pow(V_DECEND, 2) * planet.getDensityByHeight(0) / 2 * midSurfase;
+				windForce = -normalize(sf::Vector2f{ 0,-V_DECEND }) * qForce + turnVector(normalize(sf::Vector2f{ 0,-V_DECEND }), PI / 2) * yForce;
+				calculateParashute(windForce.y, V_DECEND, planet, totalMass);
+				totalMass += parSysMass;
 				totalMass -= thrMassBuf;
-				thrustMass = getThrusterMass(optimalParVel - V_LANDING, totalMass);
-				totalMass += getThrusterMass(optimalParVel - V_LANDING, totalMass);
+				thrustMass = getThrusterMass(V_DECEND - V_LANDING, totalMass);
+				totalMass += getThrusterMass(V_DECEND - V_LANDING, totalMass);
 				isParashute = true;
-				//printf("\nflag1");
+
+
+
+
 			}
+
+
 
 			printf("\nMin parVel %-5.2f totalMass %-10.2f parSysMass %-10.2f thrMass %-5.2f", optimalParVel, totalMass, parSysMass, getThrusterMass(optimalParVel - V_LANDING, totalMass));
 
@@ -552,33 +516,88 @@ public:
 			
 			
 
-			thrust = totalMass * g0 * LANDING_OVERLOAD;
-			fuelMass = (optimalParVel-V_LANDING) * totalMass / THRUST_SPEC_IMP * LANDING_OVERLOAD / sqrtf(LANDING_OVERLOAD - 1) * atan((1 - V_LANDING / optimalParVel) / (sqrtf(LANDING_OVERLOAD - 1) * (V_LANDING / optimalParVel + 1)));
+			thrust = totalMass * G0 * LANDING_OVERLOAD;
+
+			//fuelMass = (optimalParVel-V_LANDING) * totalMass / THRUST_SPEC_IMP * LANDING_OVERLOAD / sqrtf(LANDING_OVERLOAD - 1) * atan((1 - V_LANDING / optimalParVel) / (sqrtf(LANDING_OVERLOAD - 1) * (V_LANDING / optimalParVel + 1)));
+			fuelMass = (exp((optimalParVel - V_LANDING) / THRUST_SPEC_IMP) - 1) * totalMass;
 			mfuel = fuelMass;
 			IgnitionVel = optimalParVel;
-			ignitionHight = getIgnitionHight(g0, optimalParVel, V_LANDING);
+			ignitionHight = 0;// getIgnitionHight(g0, optimalParVel, V_LANDING);
 			findOptimalDescendAngle(planet);
 			//printf("\nmTPx %10.2f mTP %10.2f mOP %10.2f\n", mTPx / parashuteDensity[ParashuteType::DRAG], mTP / parashuteDensity[ParashuteType::DRAG], mOP / parashuteDensity[ParashuteType::MAIN]);
 			bcolibration = false;
-			float fuelBuff = fuelMass;
-			fuelMass = 20*fuelMass;
-			mfuel = fuelMass;
-			printf("\noptParVel %-5.2f totalMass %-10.2f parSysMass %-5.2f trhustMass %-5.2f ignH %-5.2f", optimalParVel, totalMass, parSysMass,
-				getThrusterMass(optimalParVel - V_LANDING, totalMass), getIgnitionHight(g0, IgnitionVel, V_LANDING));
+			
 
 			int drawCount = 0;
+
+			
+
+
+
+
+
+
+
+
+
+			printf("\nhIgn %.4f\t\tY %.4f\t\tvy %.5f tot mass %-10.2f\n", ignitionHight, position.y, velocity.y, totalMass);
+
+			float vyPrev = freeFallVelocity;
+
+			while (true)
+			{
+				initialize(planet);
+
+
+				while (!(position.y < hz && abs(velocity.y) > optimalParVel) && position.y > H_EPS) {
+
+					control(planet);
+					dynamic(planet);
+					//printf("\ny %-10.2f q %-10.2f", position.y, planet.getDensityByHeight(position.y)* pow(vecLength(velocity), 2) / 2.0);
+				}
+
+
+				if (abs(velocity.y) > optimalParVel*1.2 ) {
+					//if(abs(position.y/10) > 1){
+					//if (vyPrev < velocity.y) {
+						//parashuteSurface[ParashuteType::MAIN] += 1;
+					//}
+					//else {
+						parashuteDEployHight += 1;
+					//}
+					
+					//parashuteSurface[ParashuteType::DRAG] += 1;
+					printf("hParDep %.2f\tq %.2f\tvy %.2f\tdragForce %10.2f\tdens %5.2f\tparDepType %d parashuteDeployed %d onlyDrag %d\n",
+						parashuteDEployHight, planet.getDensityByHeight(position.y)* pow(vecLength(velocity), 2) / 2.0,
+						vecLength(velocity), vecLength(parashuteDragForce(planet.getDensityByHeight(position.y), velocity)),
+						planet.getDensityByHeight(position.y), parashuteType, parashuteDeployed, onlyDragPar);
+				}
+				else {
+					//printf("FFFFFFFFhIgn %.4f\t\tY %.4f\t\tvy %.5f\n", hIgnition, position.y, velocity.y);
+					bcolibration = false;
+					//printf("Fin hParDep %.4f\t\tsurf %.4f\t\tvy %.5f\tdragForce %10.2f\tdens %5.2f\tparDep %d\n", parashuteDEployHight, parashuteSurface[ParashuteType::DRAG], velocity.y, vecLength(parashuteDragForce(planet.getDensityByHeight(0), velocity)), planet.getDensityByHeight(0), parashuteDeployed);
+
+					//printf("\nflag 002\n");
+					break;
+				}
+				vyPrev = velocity.y;
+			}
+			//float fuelBuff = fuelMass;
+			//fuelMass = 2 * fuelMass;
+			//mfuel = fuelMass*2;
+			
 
 			while (true)
 			{
 				initialize(planet);
 				//while (abs(velocity.y)>0.1) {
-				while (!(position.y < (H_EPS * 2) && abs(velocity.y) - V_LANDING < V_EPS)) {
-
+				//while (!(position.y < (H_EPS * 2) && abs(velocity.y) - V_LANDING < V_EPS)) {
+				while(mfuel>0){
 					control(planet);
 					dynamic(planet);
 					//printf("hIgn %.4f\t\tY %.4f\t\tvy %.5f fuel mass %-10.2f\n", ignitionHight, position.y, velocity.y, mfuel);
 					if (drawCount >= 20) {
-						
+
 						drawCount = 0;
 						//printf("hIgn %.4f\t\tY %.4f\t\tvy %.5f fuel mass %-10.2f\n", ignitionHight, position.y, velocity.y, mfuel);
 
@@ -587,52 +606,34 @@ public:
 					drawCount++;
 				}
 
-
-				if (0< (position.y) < H_EPS) {
+				if (vecLength(velocity) - V_LANDING > V_EPS) {
+					float dm = (exp((vecLength(velocity) - V_LANDING) / THRUST_SPEC_IMP) - 1) * massSC * 0.5;
+					fuelMass +=dm+0.1 ;
+					thrustMass = getThrusterMass(V_DECEND-V_LANDING, totalMass + fuelMass);
+					printf("f mass %-5.2f thr mass %-5.2f\t", fuelMass, thrustMass);
+				}
+				if (0 < (position.y) < H_EPS) {
 					//if(abs(position.y/10) > 1){
-					ignitionHight -= position.y / abs(position.y)*0.01;
-					printf("hIgn %.4f\t\tY %.4f\t\tvy %.5f tot mass %-10.2f\n", ignitionHight, position.y, velocity.y,totalMass);
+					ignitionHight -= position.y / abs(position.y) * 0.1 + position.y * 0.1;
+					printf("hIgn %.4f\t\tY %.4f\t\tvy %.5f tot mass %-10.2f\n", ignitionHight, position.y, velocity.y, totalMass);
 				}
 				else {
-					//printf("\nFFFFFFFFhIgn %.4f\t\tY %.4f\t\tvy %.5f tot mass %-10.2f\n", ignitionHight, position.y, velocity.y, totalMass);
+					initialize(planet);
+					printf("\nFFFFFFFFhIgn %.4f\t\tY %.4f\t\tvy %.5f tot mass %-10.2f\n", ignitionHight, position.y, velocity.y, totalMass);
 					break;
 				}
 			}
 			initialize(planet);
-			while (!(position.y < (H_EPS * 2) && abs(velocity.y) - V_LANDING < V_EPS)) {
+			while (!(position.y < (H_EPS * 2) && abs(velocity.y) - V_LANDING < V_EPS  || position.y < 0)) {
 
 				control(planet);
 				dynamic(planet);
 				//printf("hIgn %.4f\t\tY %.4f\t\tvy %.5f tot mass %-10.2f\n", ignitionHight, position.y, velocity.y, totalMass);
 			}
-			fuelMass -= mfuel;
-			printf("hIgn %.4f\t\tY %.4f\t\tvy %.5f tot mass %-10.2f\n", ignitionHight, position.y, velocity.y, totalMass);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+			//fuelMass -= mfuel;
+			initialize(planet);
+			printf("\noptParVel %-5.2f totalMass %-10.2f parSysMass %-5.2f trhustMass %-5.2f ignH %-5.2f", optimalParVel, totalMass, parSysMass,
+				getThrusterMass(optimalParVel - V_LANDING, totalMass), getIgnitionHight(g0, IgnitionVel, V_LANDING));
 
 
 
@@ -676,6 +677,8 @@ public:
 
 	void calculateParashute(float dragForce,float vel,Planet& planet,float totalMass1) {
 
+		
+
 		double mTPx;
 		double mTP;
 		double mOP;
@@ -685,42 +688,42 @@ public:
 		double mTPxSpareSys;
 		double mOpSpareSys;
 
-		mTPx = parashuteDensity[ParashuteType::DRAG] * (2 * (totalMass1 * g0-dragForce)) / (cP[ParashuteType::DRAG] * planet.getDensityByHeight(hz) * vel * vel);
-		mTP = parashuteDensity[ParashuteType::DRAG] * (2 * (totalMass1 * g0 - dragForce)) / (cP[ParashuteType::DRAG] * maxQForParashute[ParashuteType::MAIN]);
-		mOP = parashuteDensity[ParashuteType::MAIN] * (2 * (totalMass1 * g0 - dragForce)) / (cP[ParashuteType::MAIN] * planet.getDensityByHeight(0) * vel * vel);
+		mTPx = parashuteDensity[ParashuteType::DRAG] * (2 * (totalMass1 * g0 - dragForce)) / (cP[ParashuteType::DRAG] * planet.getDensityByHeight(hz) * vel * vel);
+		mTP = parashuteDensity[ParashuteType::DRAG] * (  (totalMass1 * g0 - dragForce)) / (cP[ParashuteType::DRAG] * maxQForParashute[ParashuteType::MAIN]);
+		mOP = parashuteDensity[ParashuteType::MAIN] * (2 * (totalMass1 * g0 - dragForce)) / (cP[ParashuteType::MAIN] * planet.getDensityByHeight(hz) * vel * vel);
 
 
 		mTPxSys = 0.0018 * totalMass1 + mTPx * 1.09;
 		mTPSys = 0.0018 * totalMass1 + mTP * 1.09;
 		mOpSys = 12.52 / 10000.0 * overLoad * pow(totalMass1, 1.5) / vel + mOP * 1.05;
 
-		mTPxSpareSys = mTPxSys * 0.64;
-		mOpSpareSys = (mTPSys + mOpSys) * 0.64;
-
-		
+		mTPxSpareSys = mTPxSys * 0.77;
+		mOpSpareSys = (mTPSys + mOpSys) * 0.77;
+		//printf("\t\tSTPx %10.2f STP %10.2f SOP %10.2f", mTPx / parashuteDensity[ParashuteType::DRAG], mTP / parashuteDensity[ParashuteType::DRAG], mOP / parashuteDensity[ParashuteType::MAIN]);
+		//printf("\t\tmTPx %10.2f mTP %10.2f mOP %10.2f", mTPx, mTP , mOP );
 			if (mTPxSys < mTPSys + mOpSys) {
 				onlyDragPar = true;
-				parSysMass = mTPxSys * 1.64;
+				parSysMass = mTPxSys * 1.77;
 				//totalMass += parSysMass;
 				parashuteSurface[ParashuteType::DRAG] = (2 * (totalMass1 * g0 - dragForce)) / (cP[ParashuteType::DRAG] * planet.getDensityByHeight(hz) * vel * vel);
 				parashuteSurface[ParashuteType::MAIN] = 0;
 
-				parashuteSurface[ParashuteType::SPARE] = parashuteSurface[ParashuteType::DRAG] * 0.64;
+				parashuteSurface[ParashuteType::SPARE] = parashuteSurface[ParashuteType::DRAG] * 0.77;
 				maxQForParashute[ParashuteType::SPARE] = maxQForParashute[ParashuteType::DRAG];
 				cP[ParashuteType::SPARE] = cP[ParashuteType::DRAG];
-				//printf("\n flag000\n");
+				//printf(" flag000 parSys %-5.2f", mTPxSys * 1.64);
 			}
 			else {
 				onlyDragPar = false;
-				parSysMass = (mTPSys + mOpSys) * 1.64;
+				parSysMass = (mTPSys + mOpSys) * 1.77;
 				//totalMass += parSysMass;
 				parashuteSurface[ParashuteType::DRAG] = (2 * (totalMass1 * g0 - dragForce)) / (cP[ParashuteType::DRAG] * maxQForParashute[ParashuteType::MAIN]);
-				parashuteSurface[ParashuteType::MAIN] = (2 * (totalMass1 * g0 - dragForce)) / (cP[ParashuteType::MAIN] * planet.getDensityByHeight(0) * vel * vel);
+				parashuteSurface[ParashuteType::MAIN] = (2 * (totalMass1 * g0 - dragForce)) / (cP[ParashuteType::MAIN] * planet.getDensityByHeight(hz) * vel * vel);
 
-				parashuteSurface[ParashuteType::SPARE] = parashuteSurface[ParashuteType::MAIN] * 0.64;
+				parashuteSurface[ParashuteType::SPARE] = parashuteSurface[ParashuteType::MAIN] * 0.77;
 				maxQForParashute[ParashuteType::SPARE] = maxQForParashute[ParashuteType::MAIN];
 				cP[ParashuteType::SPARE] = cP[ParashuteType::MAIN];
-				//printf("\n flag001\n");
+				//printf(" flag001 parSys %-5.2f", (mTPSys + mOpSys) * 1.64);
 			}
 			//isParashute = true;
 		
@@ -738,7 +741,7 @@ public:
 
 		if (planet.isAtmosphere) {
 
-			for (int desAng = -10; desAng <= (int)(angleAttackArray[FILE_RESOLUTION - 1] * 180 / PI); desAng += 1) {
+			for (int desAng = -10; desAng <=(int) MAX_AOA; desAng += 1) {
 
 				alphaDescend = desAng / 180.0 * PI;
 				initialize(planet);
@@ -770,7 +773,7 @@ public:
 	sf::Vector2f parashuteDragForce(double density , sf::Vector2f relVelocity ) {
 
 		float vel = vecLength(relVelocity);
-		sf::Vector2f dragForce=-normalize(relVelocity);
+	sf::Vector2f dragForce=-normalize(relVelocity);
 
 		if (parashuteDeployed == true) {
 
@@ -778,7 +781,7 @@ public:
 
 				dragForce *= (float)(cP[ParashuteType::DRAG] * density * vel * vel * parashuteSurface[ParashuteType::DRAG] / 2);
 				//printf("\nflag0 cP %-5.2f den %-5.2f vel %-5.2f surf %-5.2f",
-					//cP[ParashuteType::DRAG], density, vel, parashuteSurface[ParashuteType::DRAG]);
+				//	cP[ParashuteType::DRAG], density, vel, parashuteSurface[ParashuteType::DRAG]);
 			}
 			else if (parashuteType == ParashuteType::MAIN) {
 

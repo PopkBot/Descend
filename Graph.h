@@ -5,10 +5,10 @@
 
 #define windowWidth 1000
 #define windowHeigth 500
-#define lineCount 2
+#define lineCount 1
 
-#define maxH 10
-#define maxD 20
+//#define maxH 800
+//#define maxD 20
 
 using namespace std;
 class Graph
@@ -59,6 +59,11 @@ public:
 		qx = 2,
 		dqy = 0,
 		dqx=0;
+
+	float maxY=1;
+	float maxX=1;
+	float maxH = 10;
+	float maxD = 20;
 
 
 	void initialize() {
@@ -124,9 +129,10 @@ public:
 					}
 					if (event.key.code == sf::Keyboard::Space) {
 						//drawline(10, 0);
+						toEqualScale();
 					}
 					if (event.key.code == sf::Keyboard::W) {
-
+						
 
 
 					}
@@ -164,8 +170,11 @@ public:
 
 			window.clear();
 			
+			
 			scale_x_max();
+
 			scale_y_max();
+			toEqualScale();
 
 			//Отрисовка объектов -начало-
 
@@ -186,7 +195,7 @@ public:
 				}
 
 			}
-
+			
 			window.display();
 
 			//Отрисовка объектов -конец-
@@ -229,15 +238,16 @@ public:
 		float yy;
 
 		for (int i = 0; i < lines[lineNum].convex.getPointCount(); i++) {
-			
-			xx = lines[lineNum].vertex[lines[lineNum].vertex.size() - 1].position.x -
-				lines[lineNum].convRadius * sin(angle + 2 * 3.1415/ lines[lineNum].convex.getPointCount()*i);
+			if (lines[lineNum].vertex.size() > 2) {
+				xx = lines[lineNum].vertex[lines[lineNum].vertex.size() - 1].position.x -
+					lines[lineNum].convRadius * sin(angle + 2 * 3.1415 / lines[lineNum].convex.getPointCount() * i);
 
-			yy= lines[lineNum].vertex[lines[lineNum].vertex.size() - 1].position.y -
-				lines[lineNum].convRadius * cos(angle + 2 * 3.1415 / lines[lineNum].convex.getPointCount() * i);
+				yy = lines[lineNum].vertex[lines[lineNum].vertex.size() - 1].position.y -
+					lines[lineNum].convRadius * cos(angle + 2 * 3.1415 / lines[lineNum].convex.getPointCount() * i);
 
 
-			lines[lineNum].convex.setPoint(i, sf::Vector2f{ xx,yy });
+				lines[lineNum].convex.setPoint(i, sf::Vector2f{ xx,yy });
+			}
 
 		}
 
@@ -371,7 +381,7 @@ public:
 
 	void scale_x_max() {
 
-		float maxX = axis.x0;
+		maxX = axis.x0;
 
 
 		for (int i = 0; i < lineCount; i++) {
@@ -424,7 +434,7 @@ public:
 	void scale_y_max() {
 
 
-		float maxY = axis.y0;
+		maxY = axis.y0;
 
 		for (int i = 0; i < lineCount; i++) {
 
@@ -464,6 +474,49 @@ public:
 			qy = qy * (axis.y0 - maxH) / (axis.y0 - maxY);
 
 		}
+
+
+
+	}
+
+	void toEqualScale() {
+
+		maxY = axis.y0;
+		maxX = axis.x0;
+
+		for (int i = 0; i < lineCount; i++) {
+
+			for (int j = 0; j < (lines[i].vertex.size()); j++) {
+				if (lines[i].bdraw)
+					if (lines[i].vertex[j].position.y < maxY) {
+						maxY = lines[i].vertex[j].position.y;
+					}
+				if (lines[i].bdraw)
+					if (lines[i].vertex[j].position.x > maxX) {
+						maxX = lines[i].vertex[j].position.x;
+					}
+			}
+		}
+
+		
+		float k = 0;
+		//printf("\nmaxX = %-5.2f maxY= %-5.2f xR = %-5.2f", maxX, maxY, axisR.x0);
+		
+		
+
+			k = (maxX - axis.x0) / (axis.y0 - maxY) * qy / qx;
+			maxD = axisR.x0 - axis.x0 - k * (axis.y0 - maxH);
+			
+			
+
+			if (maxD < 0) {
+			//	printf("\nflag2");
+				maxH = axis.y0 - (axisR.x0 - axis.x0 - 20) / k;
+				maxD = 20;
+			}
+		
+		//printf("\nmaxH = %-5.2f maxD = %-5.2f k = %-5.2f",maxH,maxD, k);
+
 
 	}
 

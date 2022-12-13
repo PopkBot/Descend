@@ -6,27 +6,28 @@
 #include "SFML/Graphics.hpp"
 #include "excelExporter.h"
 #include "Planet.h"
-#include "DecendVehicle.h"
+#include "DescendVehicle.h"
 
 //Импорт -конец-
 
 //Объявление констант -начало-
 
 #define SC_LRE_PARAMS_COUNT 11
-#define SC_LRE_MATRIX_PARAPMS 5
+#define SC_LRE_MATRIX_PARAPMS 2
 #define SC_DIRECTORY "Space_Crafts\\"
 #define SC_LRE_MATRIX_PARAMS_DIR "Space_Crafts\\SC_matrix_parametrs\\"
 #define PI 3.1415926535897932384
 #define H_EPS 0.1
-#define MASS_EPS 1
+#define MASS_EPS 3
 #define V_EPS 0.5
 #define H_IGNITION_INITIAL 0
 #define G_EARTH 9.81
+#define MAX_AOA 60
 
 //Объявление констант -конец-
 
 
-class SC_LRE : public DecendVehicle
+class SC_LRE : public DescendVehicle
 {
 
 public:
@@ -40,7 +41,7 @@ public:
 	double mtDebt;
 	double fuelMass;
 	float mdu;
-	float specImpuls=2500;
+	float specImpuls=2800;
 	float massCoefsPropelSys[3];
 	//double atoCoeff;
 	float massCoefsEng[3];
@@ -76,10 +77,9 @@ public:
 
 
 	double machArray[FILE_RESOLUTION];
-	double cXMachArray[FILE_RESOLUTION];
 	double angleAttackArray[FILE_RESOLUTION];
-	double cXAtackArray[FILE_RESOLUTION];
-	double adRatioAngleArray[FILE_RESOLUTION];
+	double cXMachArray[FILE_RESOLUTION][FILE_RESOLUTION];
+	double adRatioAngleArray[FILE_RESOLUTION][FILE_RESOLUTION];
 
 	
 	
@@ -101,23 +101,21 @@ public:
 		printf("\LRE vehicle\n");
 		double dataArray[SC_LRE_MATRIX_PARAPMS][FILE_RESOLUTION];
 
-		excelExporter.extractMatrixFromFile(SC_LRE_MATRIX_PARAMS_DIR, matrixParFileName, dataArray, FILE_RESOLUTION, SC_LRE_MATRIX_PARAPMS);
+		ExcelExporter::extractMatrixFromFile_ForSpaceCraft(SC_LRE_MATRIX_PARAMS_DIR, matrixParFileName, dataArray, SC_LRE_MATRIX_PARAPMS, cXMachArray, adRatioAngleArray);
 
 		for (int i = 0; i < FILE_RESOLUTION; i++) {
 			machArray[i] = dataArray[0][i];
-			cXMachArray[i] = dataArray[1][i];
-			angleAttackArray[i] = dataArray[2][i];
-			cXAtackArray[i] = dataArray[3][i];
-			adRatioAngleArray[i] = dataArray[4][i];
+			angleAttackArray[i] = dataArray[1][i];
+			
 		}
 		printMatrixParams();
 		
-		excelExporter.extractDataFromFile(SC_DIRECTORY, fileName, params, SC_LRE_PARAMS_COUNT);
+		ExcelExporter::extractDataFromFile(SC_DIRECTORY, fileName, params, SC_LRE_PARAMS_COUNT);
 
 		massSC = params[0];						//Масса КА
 		totalMass = massSC;
 		cX = params[1];							//сХ
-		cY = params[2];							//сУ
+		specImpuls = params[2];							//сУ
 		midSurfase = params[3];					//Площадь Миделя
 		phi = params[5] * PI / 180;				//Начальный угол входа 
 		velocity.x = params[4] * sin(phi);		//Vx
@@ -138,22 +136,22 @@ public:
 			massCoefsEng[2] = -0.019;
 		}
 		else if (params[8] == 2) {				//О2 Керосин
-			massCoefsPropelSys[0] = 0.043;
+			massCoefsPropelSys[0] = 0.054;
 			massCoefsPropelSys[1] = 1.6;
-			massCoefsPropelSys[2] = -0.11;
+			massCoefsPropelSys[2] = -0.12;
 
-			massCoefsEng[0] = 0.021;
+			massCoefsEng[0] = 0.029;
 			massCoefsEng[1] = 4.1;
-			massCoefsEng[2] = -0.019;
+			massCoefsEng[2] = -0.02;
 		}
 		else if (params[8] == 3) {				//О2 Н2
 			massCoefsPropelSys[0] = 0.105;
 			massCoefsPropelSys[1] = 1.6;
 			massCoefsPropelSys[2] = -0.28;
 
-			massCoefsEng[0] = 0.32;
+			massCoefsEng[0] = 0.49;
 			massCoefsEng[1] = 4.1;
-			massCoefsEng[2] = -0.021;
+			massCoefsEng[2] = -0.023;
 		}
 		else {									//О2 СПГ
 			massCoefsPropelSys[0] = 0.062;
@@ -197,7 +195,7 @@ public:
 
 		double g0 = (planet.gravPar / planet.radius) / planet.radius;
 		totalMass = findTotalMass(fuelMass, planet, MASS_EPS);
-		thrust = totalMass * g0 * overLoadCoef;
+		thrust = totalMass * G_EARTH * overLoadCoef;
 		landed = false;
 
 		//printf("total mass %2f\tg0 %.2f\tthrust %.2f\n", totalMass, g0, thrust);
@@ -230,15 +228,33 @@ public:
 	}
 
 	void printMatrixParams() {
+		
+		printf("\n\nCx\nMach No\t");
 		for (int i = 0; i < FILE_RESOLUTION; i++) {
-			printf("Mach %-10.2f  CxM %-10.2f  AAtack %-10.2f  CxA %-10.2f  L/D %-10.2f\n", 
-				machArray[i],
-				cXMachArray[i],
-				angleAttackArray[i] / PI * 180,
-				cXAtackArray[i],
-				adRatioAngleArray[i]);
-			
+			printf("%-4.2f ", machArray[i]);
 		}
+		printf("\nAoA");
+		for (int i = 0; i < FILE_RESOLUTION; i++) {
+			printf("\n%-4.2f\t", angleAttackArray[i] / PI * 180);
+			for (int j = 0; j < FILE_RESOLUTION; j++) {
+				printf("%-4.2f ", cXMachArray[i][j]);
+
+			}
+		}
+		printf("\n\nL/D\nMach No\t");
+		for (int i = 0; i < FILE_RESOLUTION; i++) {
+			printf("%-4.2f ", machArray[i]);
+		}
+		printf("\nAoA");
+		for (int i = 0; i < FILE_RESOLUTION; i++) {
+			printf("\n%-4.2f\t", angleAttackArray[i] / PI * 180);
+			for (int j = 0; j < FILE_RESOLUTION; j++) {
+				printf("%-4.2f ", adRatioAngleArray[i][j]);
+
+			}
+		}
+
+
 	}
 
 	void dynamic(Planet& planet)override {
@@ -311,7 +327,7 @@ public:
 			phi = 0;
 
 
-		if (abs(position.y - hIgnition) < 100 || position.y < (hz * 1.1)) {
+		if (abs(position.y - hIgnition) < 500 || position.y < (hz * 2)) {
 			dt = 0.0001;
 		}
 		else {
@@ -338,8 +354,9 @@ public:
 			
 		}
 		*/
-		if (position.y < H_EPS ) {	//&& abs(velocity.y) < V_EPS
+		if (position.y < H_EPS && !bcolibration ) {	//&& abs(velocity.y) < V_EPS
 			landed = true;
+			totalMass = findTotalMass(fuelMass, planet, MASS_EPS);
 		}
 
 		//printf("t %2f\t", time);
@@ -448,11 +465,11 @@ public:
 		double deltaM = 0.1;
 		double g0= (planet.gravPar / planet.radius) / planet.radius;
 
-		double delta = massSC + propellantMass * (aCoef(propellantMass) + 1) + totMass*(gammaCoefSC(totMass * g0 * overLoadCoef) * overLoadCoef - 1);
+		double delta = massSC + propellantMass * (aCoef(propellantMass) + 1) + totMass*(gammaCoefSC(thrust) * overLoadCoef - 1);
 
 		while (delta > eps) {
 			totMass += deltaM;
-			delta = massSC + propellantMass * (aCoef(propellantMass) + 1) + totMass * (gammaCoefSC(totMass * g0 * overLoadCoef) * overLoadCoef - 1);
+			delta = massSC + propellantMass * (aCoef(propellantMass) + 1) + totMass * (gammaCoefSC(totMass*G_EARTH * overLoadCoef) * overLoadCoef - 1);
 			//printf("delta %-10.2f\ttotM %-10.2f\tfuelSys %-10.2f\tpropS %-10.2f\n", delta, totMass, propellantMass * (aCoef(propellantMass) + 1), gammaCoefSC(totMass * g0 * overLoadCoef) * overLoadCoef*totMass);
 		}
 		if (propellantMass == 0) {
@@ -668,7 +685,7 @@ public:
 
 		if (planet.isAtmosphere) {
 
-			for (int desAng = -10; desAng <= (int)(angleAttackArray[FILE_RESOLUTION - 1] * 180 / PI); desAng += 1) {
+			for (int desAng = -10; desAng <= (int)MAX_AOA; desAng += 1) {
 
 				alphaDescend = desAng / 180.0 * PI;
 				initialize(planet);
@@ -699,7 +716,7 @@ public:
 
 	void findOptimalIgnitionHeight(Planet &planet) {
 
-	
+		int drawCount = 0;
 		while (true)
 		{
 			initialize(planet);
@@ -709,6 +726,16 @@ public:
 				control(planet);
 				dynamic(planet);
 				
+
+				if (drawCount >= 50) {
+
+					drawCount = 0;
+					//printf("hIgn %.4f\t\tY %.4f\t\tvy %.5f cx %-5.2f  cy %-5.2f\n", hIgnition, position.y, velocity.y, cxCoefficient(1, alpha, position.y, planet),
+					//	cyCoefficient(vecLength(relVelocity), alpha, position.y, planet, cxCoefficient(vecLength(relVelocity), alpha, position.y, planet)));
+
+
+				}
+				drawCount++;
 			}
 
 			
@@ -761,8 +788,8 @@ public:
 	double cxCoefficient(double v,double angleA,double h,Planet &planet) {
 
 		double cxCoef;
-		double cxA=1;
-		double cxM=1;
+		int cxAIndex= FILE_RESOLUTION - 1;
+		int cxMIndex= FILE_RESOLUTION - 1;
 		double machNo = v / planet.getSonicSpeed(h);
 
 		bool cxAFound = false;
@@ -770,46 +797,61 @@ public:
 
 		for (int i = 0; i < FILE_RESOLUTION; i++) {
 			
-			if (angleA < angleAttackArray[i] && !cxAFound) {
-				cxA = (cXAtackArray[i] - cXAtackArray[i - 1]) / (angleAttackArray[i] - angleAttackArray[i - 1]) * (angleA - angleAttackArray[i - 1]) + cXAtackArray[i - 1];
+			if (angleA <= angleAttackArray[i] && !cxAFound) {
+				cxAIndex = i;
 				cxAFound = true;
 			}
-			if (machNo < machArray[i] && !cxMFound) {
-				cxM = (cXMachArray[i] - cXMachArray[i - 1]) / (machArray[i] - machArray[i - 1]) * (machNo - machArray[i - 1]) + cXMachArray[i - 1];
+			if (machNo <= machArray[i] && !cxMFound) {
+				cxMIndex = i;
 				cxMFound = true;
 			}
 
 		}
+		if (cxMIndex > 0) {
+			//cxCoef = cX * (cXMachArray[cxAIndex][cxMIndex] - cXMachArray[cxAIndex][cxMIndex - 1]) / (machArray[cxMIndex] - machArray[cxMIndex - 1]) * (machNo - machArray[cxMIndex - 1]) + cXMachArray[cxAIndex][cxMIndex - 1];
+			cxCoef = cX * cXMachArray[cxAIndex][cxMIndex];
+			return(cxCoef);
+		}
+		else {
+			cxCoef = cX * cXMachArray[cxAIndex][cxMIndex];
+		}
+		
 
-		if (!cxAFound) {
-			cxA = cXAtackArray[FILE_RESOLUTION-1];
-		}
-		if (!cxMFound) {
-			cxM = cXMachArray[FILE_RESOLUTION-1];
-		}
-		cxCoef = cX * cxA * cxM;
 		return(cxCoef);
 
 	}
 
 	double cyCoefficient(double v, double angleA, double h, Planet &planet,double cxC) {
 
-		double ld = 0;
-		bool ldFound = false;
+		double LDCoef;
+		int cxAIndex = FILE_RESOLUTION - 1;
+		int cxMIndex = FILE_RESOLUTION - 1;
+		double machNo = v / planet.getSonicSpeed(h);
+
+		bool cxAFound = false;
+		bool cxMFound = false;
 
 		for (int i = 0; i < FILE_RESOLUTION; i++) {
 
-			if (angleA <= angleAttackArray[i] && !ldFound) {
-				ld = (adRatioAngleArray[i] - adRatioAngleArray[i - 1]) / (angleAttackArray[i] - angleAttackArray[i - 1]) * (angleA - angleAttackArray[i - 1]) + adRatioAngleArray[i - 1];
-				ldFound = true;
-				
+			if (angleA <= angleAttackArray[i] && !cxAFound) {
+				cxAIndex = i;
+				cxAFound = true;
 			}
+			if (machNo <= machArray[i] && !cxMFound) {
+				cxMIndex = i;
+				cxMFound = true;
+			}
+
 		}
-		if (!ldFound) {
-			ld = adRatioAngleArray[FILE_RESOLUTION - 1];
+		if (cxMIndex > 0) {
+			//LDCoef = (adRatioAngleArray[cxAIndex][cxMIndex] - adRatioAngleArray[cxAIndex][cxMIndex - 1]) / (machArray[cxMIndex] - machArray[cxMIndex - 1]) * (machNo - machArray[cxMIndex - 1]) + adRatioAngleArray[cxAIndex][cxMIndex - 1];
+			LDCoef = adRatioAngleArray[cxAIndex][cxMIndex];
+		}
+		else {
+			LDCoef =  adRatioAngleArray[cxAIndex][cxMIndex];
 		}
 		//printf("\n cyccc %.5f\tcxC %0.2f\tld %.2f\tang %.2f\n", cxC * ld,cxC,ld,angleA);
-		return (cxC * ld);
+		return (LDCoef* cxC);
 
 
 	}

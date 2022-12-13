@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Decend.cpp">
+    <ClCompile Include="Descend.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -35,10 +35,13 @@
     <ClInclude Include="SC_LRE.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="DecendVehicle.h">
+    <ClInclude Include="DescendVehicle.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ParachuteDecend.h">
+    <ClInclude Include="ParachuteDescend.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GlideDescend.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

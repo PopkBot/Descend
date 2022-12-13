@@ -42,8 +42,9 @@ public:
 
 // Ìועמהû -םאקאכמ-
 
-	void extractMatrixFromFile(string dir, string fileName, double dataArray[][FILE_RESOLUTION], int dataLength, int dataCount) {
+	static void extractMatrixFromFile(string dir, string fileName, double dataArray[][FILE_RESOLUTION], int dataLength, int dataCount) {
 
+		ifstream file;
 		file.open(dir + fileName + ".csv");
 		string dataString;
 		string::size_type stringPosition;
@@ -67,8 +68,84 @@ public:
 
 	}
 
-	void showFileData(string dir,string fileName,int fileLength) {
+	static	void extractMatrixFromFile_ForSpaceCraft(string dir, string fileName, double dataArray[][FILE_RESOLUTION], int dataCount,double matrixData[FILE_RESOLUTION][FILE_RESOLUTION]) {
 
+		ifstream file;
+		file.open(dir + fileName + ".csv");
+		string dataString;
+		string::size_type stringPosition;
+		file >> dataString;
+
+		for (int i = 0; i < FILE_RESOLUTION; i++) {
+			file >> dataString;
+			for (int j = 0; j < dataCount; j++) {
+				stringPosition = dataString.find(';');
+				//cout << dataString.substr(0, stringPosition)<<"\n";
+
+				dataArray[j][i] = stod(dataString.substr(0, stringPosition));
+				dataString.erase(0, stringPosition + 1);
+
+			}
+			for (int j = 0; j < FILE_RESOLUTION; j++) {
+				stringPosition = dataString.find(';');
+				//cout << dataString.substr(0, stringPosition)<<"\n";
+
+				matrixData[i][j] = stod(dataString.substr(0, stringPosition));
+				dataString.erase(0, stringPosition + 1);
+
+			}
+
+		}
+
+		file.close();
+
+
+	}
+
+	static void extractMatrixFromFile_ForSpaceCraft(string dir, string fileName, double dataArray[][FILE_RESOLUTION], int dataCount, double matrixData1[FILE_RESOLUTION][FILE_RESOLUTION], double matrixData2[FILE_RESOLUTION][FILE_RESOLUTION]) {
+		
+		ifstream file;
+		file.open(dir + fileName + ".csv");
+		string dataString;
+		string::size_type stringPosition;
+		file >> dataString;
+
+		for (int i = 0; i < FILE_RESOLUTION; i++) {
+			file >> dataString;
+			for (int j = 0; j < dataCount; j++) {
+				stringPosition = dataString.find(';');
+				//cout << dataString.substr(0, stringPosition)<<"\n";
+
+				dataArray[j][i] = stod(dataString.substr(0, stringPosition));
+				dataString.erase(0, stringPosition + 1);
+
+			}
+			for (int j = 0; j < FILE_RESOLUTION; j++) {
+				stringPosition = dataString.find(';');
+				//cout << dataString.substr(0, stringPosition)<<"\n";
+
+				matrixData1[i][j] = stod(dataString.substr(0, stringPosition));
+				dataString.erase(0, stringPosition + 1);
+
+			}
+			for (int j = 0; j < FILE_RESOLUTION; j++) {
+				stringPosition = dataString.find(';');
+				//cout << dataString.substr(0, stringPosition)<<"\n";
+
+				matrixData2[i][j] = stod(dataString.substr(0, stringPosition));
+				dataString.erase(0, stringPosition + 1);
+
+			}
+
+		}
+
+		file.close();
+
+
+	}
+
+	static void showFileData(string dir,string fileName,int fileLength) {
+		ifstream file;
 		string data;
 		string::size_type stringPosition;
 		double dataDouble;
@@ -83,8 +160,8 @@ public:
 
 	}
 
-	void showFileData(string dir,string fileName) {
-
+	static void showFileData(string dir,string fileName) {
+		ifstream file;
 		string data;
 		string::size_type stringPosition;
 		double dataDouble;
@@ -99,8 +176,8 @@ public:
 
 	}
 
-	void extractDataFromFile(string dir, string fileName, double data[], int dataLength) {
-
+	static void extractDataFromFile(string dir, string fileName, double data[], int dataLength) {
+		ifstream file;
 		file.open(dir + fileName + ".csv");
 		string dataString;
 		string::size_type stringPosition;

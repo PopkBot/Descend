@@ -14,6 +14,7 @@
 #define SC_PARAMS_COUNT 8
 #define SC_DIRECTORY "Space_Crafts\\"
 #define PI 3.1415926535897932384
+#define G0 9.81
 
 //Объявление констант -конец-
 class SpaceCraft
@@ -24,15 +25,25 @@ public:
 	ExcelExporter excelExporter;
 
 	double massSC;
-	double cX;
-	double cY;
+	float cX;
+	float cY;
 	double midSurfase;
 	double phi;
-	double dt = 0.05;
+	double dt = 0.01;
 	double time = 0;
+
+	bool landed = false;
+
+	double params[SC_PARAMS_COUNT];
 
 	sf::Vector2f velocity;
 	sf::Vector2f position;
+
+	sf::Vector2f windForceLocal;
+	sf::Vector2f windForceGlobal;
+	sf::Vector2f acselGlobal;
+	sf::Vector2f gravityForce;
+	sf::Vector2f relVelocity;
 	//sf::Vector2f pressureCenter;
 	
 
@@ -44,7 +55,7 @@ public:
 	//Методы -начало-
 	SpaceCraft(string fileName) {
 
-		double params[SC_PARAMS_COUNT];
+		
 		excelExporter.extractDataFromFile(SC_DIRECTORY, fileName, params, SC_PARAMS_COUNT);
 		
 		massSC=params[0];
@@ -64,39 +75,62 @@ public:
 
 	}
 
+	void printStats() {
+		printf("x %-5.2f y %-5.2f overLoad %-5.2f V %-5.2f GF %-5.2f WF %-5.2f \n", position.x/1000.0f, position.y, vecLength(acselGlobal) / G0, vecLength(velocity),vecLength( gravityForce),vecLength( windForceGlobal));
+	}
+
+	void initialize() {
+
+		massSC = params[0];
+		cX = params[1];
+		cY = params[2];
+		midSurfase = params[3];
+		phi = params[5] * PI / 180;
+		velocity.x = params[4] * sin(phi);
+		velocity.y = -params[4] * cos(phi);
+		position.x = params[6];
+		position.y = params[7];
+
+		landed = false;
+		time = 0;
+
+	}
+
 	void dynamic(Planet &planet) {
 
 		
-		sf::Vector2f windForceLocal;
-		sf::Vector2f windForceGlobal;
-		sf::Vector2f acselGlobal;
-		sf::Vector2f gravityForce;
-		double qForce = cX * (pow(velocity.x - planet.windSpeed, 2) + velocity.y * velocity.y) * planet.getDensityByHeight(position.y) / 2 * midSurfase;
-		double yForce = cY * (pow(velocity.x - planet.windSpeed, 2) + velocity.y * velocity.y) * planet.getDensityByHeight(position.y) / 2 * midSurfase;
+		sf::Vector2f centripicalAcs = sf::Vector2f{ 0,0 };
 
-		double alpha;
-		if (planet.windSpeed < 0)
-			alpha =acos( dot(normalize( velocity),normalize( sf::Vector2f{ velocity.x -(float) planet.windSpeed,velocity.y })));
-		else if (planet.windSpeed > 0)
-			alpha = -acos(dot(normalize(velocity), normalize(sf::Vector2f{ velocity.x - (float)planet.windSpeed,velocity.y })));
-		else
-			alpha = 0;
+		relVelocity = velocity - sf::Vector2f{ planet.windSpeed,0 };
 
-		windForceLocal.x = qForce * cos(alpha) - yForce * sin(alpha);
-		windForceLocal.y = qForce * sin(alpha) + yForce * cos(alpha);
+		//double qForce = cX * (pow(velocity.x - planet.windSpeed, 2) + velocity.y * velocity.y) * planet.getDensityByHeight(position.y) / 2 * midSurfase;
+		//double yForce = cY * (pow(velocity.x - planet.windSpeed, 2) + velocity.y * velocity.y) * planet.getDensityByHeight(position.y) / 2 * midSurfase;
 
-		//windForceLocal = -normalize(sf::Vector2f{ velocity.x - (float)planet.windSpeed,velocity.y })*(float)qForce
-		//				+(float)yForce*normalize(turnVector(sf::Vector2f{ velocity.x - (float)planet.windSpeed,velocity.y }, 0.5 * PI));
 		
-		windForceGlobal.y = windForceLocal.x * cos(phi) + windForceLocal.y * sin(phi);
-		windForceGlobal.x = -windForceLocal.x * sin(phi) + windForceLocal.y * cos(phi);
+
+		float cxCoef = cX;
+		float cyCoef = cY;
+
+		float qForce = cxCoef * pow(vecLength(relVelocity), 2) * planet.getDensityByHeight(position.y) / 2 * midSurfase;
+		float yForce = cyCoef * pow(vecLength(relVelocity), 2) * planet.getDensityByHeight(position.y) / 2 * midSurfase;
+
+
+		//windForceLocal.x = qForce * cos(alpha) - yForce * sin(alpha);
+		//windForceLocal.y = qForce * sin(alpha) + yForce * cos(alpha);
+
+		//windForceGlobal.y = windForceLocal.x * cos(phi) + windForceLocal.y * sin(phi);
+		//windForceGlobal.x = -windForceLocal.x * sin(phi) + windForceLocal.y * cos(phi);
+
+		windForceGlobal = -normalize(relVelocity) * qForce + turnVector(normalize(relVelocity), PI / 2) * yForce;
 
 		//windForceGlobal = turnVector(windForceLocal,- PI / 2 + phi);
 
 		gravityForce.y =- planet.gravPar * massSC / pow(planet.radius+position.y, 2);
 		gravityForce.x = 0;
+
+		centripicalAcs.y = pow(velocity.x, 2) / (planet.radius + position.y);
 		
-		acselGlobal = (gravityForce + windForceGlobal) / (float) massSC;
+		acselGlobal = (gravityForce + windForceGlobal) / (float) massSC + centripicalAcs;
 
 		velocity =velocity+ acselGlobal *(float) dt;
 
@@ -110,10 +144,12 @@ public:
 			phi = 0;
 		time += dt;
 
-		if (position.y < 0)
+		if (position.y < 0) {
 			position.y = 0;
+			landed = true;
+		}
 
-		printf("t %2f\t", time);
+		//printf("t %2f\t", time);
 	}
 
 	double dot(sf::Vector2f vec1, sf::Vector2f vec2) {

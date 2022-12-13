@@ -84,7 +84,7 @@ public:
 	void printAtmospereParametrs() {
 		for (int i = 0; i < FILE_RESOLUTION; i++) {
 			
-			printf("HS %-20.2f  DS %-20.2f  SSS %-20.2f\n", heightStep[i], densityStep[i], sonicSpeedStep[i]);
+			printf("HS %-20.2f  DS %-20.5f  SSS %-20.3f\n", heightStep[i], densityStep[i], sonicSpeedStep[i]);
 		}
 	}
 
@@ -97,7 +97,7 @@ public:
 					return (	(densityStep[i]-densityStep[i-1])/(heightStep[i] - heightStep[i - 1])*(height-heightStep[i-1])+densityStep[i-1]	);
 				}
 			}
-		return(densityStep[0]);
+		return(0);
 
 	}
 
